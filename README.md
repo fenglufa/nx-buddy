@@ -42,11 +42,12 @@ stdio 冒烟通过（`tools/list` 暴露 `ping`、`license_status`）。
 宿主 `license_status` 真验签、`LICENSE_INVALID` 闸门就绪；端到端冒烟 `build/smoke_license.py` 通过（含篡改必拒）。
 **规则引擎批次**：`NxAssistant.Rules` 加载 company_v3 主包 + 华恒子包（合并 28 条规则），消费"证据"模型产出 findings（standard/severity/enforcement/建议/占位标记）；
 写前拦截与审图共用；金样 `dotnet run --project tests/NxAssistant.Rules.Tests`（含 φ13.2→FAIL+建议 13/14）全绿。
+**测试样件**：`test/drawings/` 用 NX 2412 实机造出 5 个 `.prt` 金样（合规板、φ13.2 违规、4×重复孔、华恒销轴/传感器、空图），附预期 findings 对照表，保留不删。
 
 待办（按 `tool-migration-v1.md` §5 分批）：
 - 读/写工具批次：移植 §9.1 各 `_op_` 到 C#（含写后回读护栏、stable_id、表达式字符串通道）。
-- 审图长任务：`review_folder`/`review_status`/`review_findings`（run_id 状态机 + xlsx 报告，xlsx 用 ClosedXML）；把规则引擎接上 NX 证据抽取。
-- 测试图纸集：`test/` 造合规/违规样件（φ13.2 金样等），保留不删。
+- 审图长任务：`review_folder`/`review_status`/`review_findings`（run_id 状态机 + xlsx 报告，xlsx 用 ClosedXML）；把规则引擎接上 NX 证据抽取，用 `test/drawings` 验收。
+- 工程图类样件（图框/标题栏/图层）：待客户确认真实图框 id 后补 2D 图纸样件。
 
 ## 已知约束 / 红线
 

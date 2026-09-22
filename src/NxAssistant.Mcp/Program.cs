@@ -40,10 +40,8 @@ public sealed class NxTools
 
     [McpServerTool(Name = "ping")]
     [Description("连通性与就绪检查：验证 Agent→MCP→IPC→NX 插件链路是否通，返回 NX 进程与工作部件信息。")]
-    public async Task<JsonElement> Ping(CancellationToken ct)
-    {
-        return await _plugin.CallAsync(MethodNames.Ping, null, ct);
-    }
+    public Task<JsonElement> Ping(CancellationToken ct) =>
+        Guard(() => _plugin.CallAsync(MethodNames.Ping, null, ct), ct);
 
     [McpServerTool(Name = "license_status")]
     [Description("读取离线授权状态：验签/验期/绑机结果，含 lic_id、客户、有效期、剩余天数、机器指纹。create/review 类工具未授权时返回 LICENSE_INVALID。")]
@@ -54,43 +52,70 @@ public sealed class NxTools
 
     [McpServerTool(Name = "get_part_summary")]
     [Description("读取当前工作部件概要：名称/完整路径/体数/特征清单（journal id）。max_features 控制特征截断，默认 100。")]
-    public async Task<JsonElement> GetPartSummary(
-        int? max_features,
-        CancellationToken ct)
+    public Task<JsonElement> GetPartSummary(
+        int? max_features = null,
+        CancellationToken ct = default)
     {
         var p = new Dictionary<string, object?>();
         if (max_features is int mf) p["max_features"] = mf;
-        return await _plugin.CallAsync(MethodNames.GetPartSummary, p, ct);
+        return Guard(() => _plugin.CallAsync(MethodNames.GetPartSummary, p, ct), ct);
     }
 
     [McpServerTool(Name = "inspect_work_part_geometry")]
     [Description("逐体几何概览：每个体的面/边数与轴对齐包围盒（min/max/size）。max_bodies 控制体数上限，默认 50。")]
-    public async Task<JsonElement> InspectWorkPartGeometry(
-        int? max_bodies,
-        CancellationToken ct)
+    public Task<JsonElement> InspectWorkPartGeometry(
+        int? max_bodies = null,
+        CancellationToken ct = default)
     {
         var p = new Dictionary<string, object?>();
         if (max_bodies is int mb) p["max_bodies"] = mb;
-        return await _plugin.CallAsync(MethodNames.InspectWorkPartGeometry, p, ct);
+        return Guard(() => _plugin.CallAsync(MethodNames.InspectWorkPartGeometry, p, ct), ct);
     }
 
     [McpServerTool(Name = "save_work_part")]
     [Description("保存当前工作部件（含组件），返回落盘路径/大小与未保存部件数。写操作前置规则守卫批次会挂在此链路上。")]
-    public async Task<JsonElement> SaveWorkPart(CancellationToken ct)
-    {
-        return await _plugin.CallAsync(MethodNames.SaveWorkPart, null, ct);
-    }
+    public Task<JsonElement> SaveWorkPart(CancellationToken ct) =>
+        Guard(() => _plugin.CallAsync(MethodNames.SaveWorkPart, null, ct), ct);
 
     [McpServerTool(Name = "create_part")]
     [Description("在工作区沙箱（NXA_WORKSPACE，默认 %LOCALAPPDATA%\\NXAssistant\\workspace）内新建并显示部件。units 取 millimeters/inches；file_name 只允许纯文件名。需有效授权。")]
-    public async Task<JsonElement> CreatePart(
+    public Task<JsonElement> CreatePart(
         string file_name,
-        string? units,
-        CancellationToken ct)
+        string? units = null,
+        CancellationToken ct = default)
     {
-        _license.EnsureValid("create_part");
-        var p = new Dictionary<string, object?> { ["file_name"] = file_name };
-        if (!string.IsNullOrWhiteSpace(units)) p["units"] = units;
-        return await _plugin.CallAsync(MethodNames.CreatePart, p, ct);
+        return Guard(() =>
+        {
+            _license.EnsureValid("create_part");
+            var p = new Dictionary<string, object?> { ["file_name"] = file_name };
+            if (!string.IsNullOrWhiteSpace(units)) p["units"] = units;
+            return _plugin.CallAsync(MethodNames.CreatePart, p, ct);
+        }, ct);
+    }
+
+    /// <summary>
+    /// SDK 2.2.0 会把工具异常吞成 "An error occurred invoking ..."。这里对齐 NX-MCP 约定：
+    /// 失败转成可读 JSON 载荷 {ok:false,error,error_type} 交给 Agent 判读，而不是丢协议错误。
+    /// </summary>
+    private static async Task<JsonElement> Guard(Func<Task<JsonElement>> call, CancellationToken ct = default)
+    {
+        try
+        {
+            return await call();
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            var payload = new Dictionary<string, object?>
+            {
+                ["ok"] = false,
+                ["error"] = ex.Message,
+                ["error_type"] = ex.GetType().Name,
+            };
+            return JsonDocument.Parse(JsonSerializer.Serialize(payload)).RootElement;
+        }
     }
 }

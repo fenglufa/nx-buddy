@@ -37,13 +37,16 @@ public sealed class NxPluginClient
                 "NX 小助手插件未连接：请确认 NX 2412 已启动并加载了 NxAssistant.NxPlugin.dll", ex);
         }
 
-        using var writer = new StreamWriter(pipe, new UTF8Encoding(false)) { AutoFlush = false };
-        using var reader = new StreamReader(pipe, new UTF8Encoding(false));
+        // leaveOpen=true：reader/writer 释放时不得抢先关掉管道，否则 writer.Dispose
+        // 会对已关闭管道二次 Close 而抛 ObjectDisposedException，吞掉成功响应。
+        using var writer = new StreamWriter(pipe, new UTF8Encoding(false), 1024, leaveOpen: true) { AutoFlush = false };
+        using var reader = new StreamReader(pipe, new UTF8Encoding(false), false, 1024, leaveOpen: true);
         await writer.WriteAsync(line + "\n").ConfigureAwait(false);
         await writer.FlushAsync().ConfigureAwait(false);
 
-        var respLine = await reader.ReadLineAsync().ConfigureAwait(false)
-            ?? throw new NxNotConnectedException("插件未返回响应（管道被关闭）");
+        var respLine = await reader.ReadLineAsync().ConfigureAwait(false);
+        if (respLine == null)
+            throw new NxNotConnectedException("插件未返回响应（管道被关闭）");
         var resp = JsonSerializer.Deserialize<BridgeResponse>(respLine, NxJson.Options)
             ?? throw new InvalidOperationException("插件返回了空响应");
         return resp;

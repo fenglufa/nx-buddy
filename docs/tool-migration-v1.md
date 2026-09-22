@@ -142,7 +142,7 @@ V1 交付集 = §9.1 + §9.2 + `move_object` = **34 个工具**（客户 2026-09
 
 ## 5. 分批实现顺序（逐步提交，不攒代码）
 
-> 进度（2026-09-22）：批 1 骨架 ✅（8d304a0）；批 2 授权 ✅（0188b1a）；规则引擎（批 4 的引擎部分）✅ `src/NxAssistant.Rules` + `tests/NxAssistant.Rules.Tests`（φ13.2 金样）；其余进行中。
+> 进度（2026-09-22）：批 1 骨架 ✅（8d304a0）；批 2 授权 ✅（0188b1a）；批 4 规则引擎部分 ✅（d747436）+ 批 6 金样 5 件 ✅（f9f88da）；批 3 读工具首切片 ✅ 代码（a63a351：主线程 marshal + `get_part_summary`/`inspect_work_part_geometry`/`save_work_part`/`create_part`，插件已 deploy 到 startup），**实机联调 ✅**（ping/闸门/create→summary→inspect→save 全链路通过，`build/smoke_live.py`）；PipeServer 双关闭修复待在下次 NX 关闭后重新 deploy；其余进行中。
 
 按"先跑通骨架 → 再补读 → 再补写 → 最后审图长任务"推进，每批一个可验证闭环、独立提交：
 

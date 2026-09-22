@@ -58,16 +58,22 @@ internal sealed class PipeServer
 
     private void HandleConnection(NamedPipeServerStream server)
     {
-        using var reader = new StreamReader(server, new UTF8Encoding(false));
-        using var writer = new StreamWriter(server, new UTF8Encoding(false)) { AutoFlush = false };
+        // leaveOpen=true：reader/writer 释放时不得关掉管道句柄（管道生命周期归 Run 的 using 管），
+        // 否则 writer.Dispose 二次 Close 会抛 ObjectDisposedException 冒泡成伪"accept error"。
+        using var reader = new StreamReader(server, new UTF8Encoding(false), false, 1024, leaveOpen: true);
+        using var writer = new StreamWriter(server, new UTF8Encoding(false), 1024, leaveOpen: true) { AutoFlush = false };
         string? line;
-        while (_running && (line = reader.ReadLine()) != null)
+        try
         {
-            if (line.Trim().Length == 0) continue;
-            string responseLine = ProcessLine(line);
-            writer.Write(responseLine + "\n");
-            writer.Flush();
+            while (_running && (line = reader.ReadLine()) != null)
+            {
+                if (line.Trim().Length == 0) continue;
+                string responseLine = ProcessLine(line);
+                writer.Write(responseLine + "\n");
+                writer.Flush();
+            }
         }
+        catch (IOException) { /* 客户端读完即断开属常态，不算错误 */ }
     }
 
     private string ProcessLine(string line)

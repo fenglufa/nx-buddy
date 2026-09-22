@@ -18,9 +18,28 @@ internal static class Program
         if (args.Contains("--ui-probe"))
             return UiProbe.Run();
 
+        // 单实例互斥（第六轮验收发现可双开=双托盘+双宿主）：二次启动把"打开主页"
+        // 信号发给已有实例后静默退出。互斥只拦 GUI 常驻，无头探针不受影响。
+        const string MutexName = @"Local\NXAssistant_Tray_SingleInstance";
+        const string ShowEventName = @"Local\NXAssistant_Tray_ShowMain";
+        using var mutex = new Mutex(true, MutexName, out bool isFirst);
+        if (!isFirst)
+        {
+            try
+            {
+                using var ev = EventWaitHandle.OpenExisting(ShowEventName);
+                ev.Set();
+            }
+            catch (Exception)
+            {
+                // 已有实例正在退出：直接结束，开机自启/手动会再拉起
+            }
+            return 0;
+        }
+
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
-        using var app = new TrayAppContext();
+        using var app = new TrayAppContext(ShowEventName);
         Application.Run(app);
         return 0;
     }
@@ -35,11 +54,16 @@ internal sealed class TrayAppContext : ApplicationContext
 {
     private readonly NotifyIcon _icon;
     private readonly System.Windows.Forms.Timer _timer;
+    private readonly EventWaitHandle? _showEvent;   // 第二实例发来的"打开主页"信号（AutoReset）
+    private readonly System.Windows.Forms.Timer _showPoll;   // 300ms 轮询信号，二次启动即时唤醒
     private TrayStatus _status = StatusProbe.Read();
     private MainWindow? _main;
 
-    public TrayAppContext()
+    public TrayAppContext(string showEventName)
     {
+        // 命名事件由第一实例创建持名；第二实例只 Set()。用现成的 UI 线程定时器 WaitOne(0)
+        // 收信号，省掉跨线程编组。
+        _showEvent = new EventWaitHandle(false, EventResetMode.AutoReset, showEventName);
         _icon = new NotifyIcon
         {
             Icon = SystemIcons.Application,
@@ -51,6 +75,9 @@ internal sealed class TrayAppContext : ApplicationContext
         _icon.MouseClick += (_, e) => { if (e.Button == System.Windows.Forms.MouseButtons.Left) ShowMain(); };
         _timer = new System.Windows.Forms.Timer { Interval = 3000 };
         _timer.Tick += (_, _) => Refresh();
+        _showPoll = new System.Windows.Forms.Timer { Interval = 300 };
+        _showPoll.Tick += (_, _) => { if (_showEvent?.WaitOne(0) == true) ShowMain(); };
+        _showPoll.Start();
         _timer.Start();
         Refresh();
         // 启动即展示主页（用户反馈：只在托盘冒个图标不知道装没装上）；关主页=隐藏回托盘。
@@ -137,8 +164,10 @@ internal sealed class TrayAppContext : ApplicationContext
         if (disposing)
         {
             _timer.Dispose();
+            _showPoll.Dispose();
             _main?.RealClose();
             _icon.Dispose();
+            _showEvent?.Dispose();
         }
         base.Dispose(disposing);
     }

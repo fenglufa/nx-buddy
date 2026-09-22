@@ -155,6 +155,108 @@ public sealed class NxTools
     public Task<JsonElement> RebuildWorkPart(CancellationToken ct) =>
         Guard(() => _plugin.CallAsync(MethodNames.RebuildWorkPart, null, ct), ct);
 
+    [McpServerTool(Name = "create_block")]
+    [Description("在工作部件原点系创建长方体（OriginAndEdgeLengths，布尔 Create）。length/width/height 默认 100/60/40，须 >0；origin 默认 [0,0,0]。需有效授权。")]
+    public Task<JsonElement> CreateBlock(
+        double? length = null,
+        double? width = null,
+        double? height = null,
+        JsonElement? origin = null,
+        CancellationToken ct = default)
+    {
+        return Guard(() =>
+        {
+            _license.EnsureValid("create_block");
+            var p = new Dictionary<string, object?>();
+            if (length is double l) p["length"] = l;
+            if (width is double w) p["width"] = w;
+            if (height is double h) p["height"] = h;
+            if (origin is JsonElement o) p["origin"] = o;
+            return _plugin.CallAsync(MethodNames.CreateBlock, p, ct);
+        }, ct);
+    }
+
+    [McpServerTool(Name = "create_parametric_sketch")]
+    [Description("在 XY/XZ/YZ 基准平面上创建参数化草图。geometry 必填：line(start/end)、rectangle(origin/width/height，自动加水平/垂直/重合约束)、circle/arc(center/radius[,start_angle_deg/end_angle_deg])，局部二维坐标自动映射世界系。constraints/dimensions 可选；dimensions 每项建独立表达式并命名 sketch_尺寸名，供 set_feature_expression 改名复用。需有效授权。")]
+    public Task<JsonElement> CreateParametricSketch(
+        JsonElement geometry,
+        string? name = null,
+        string? plane = null,
+        JsonElement? origin = null,
+        JsonElement? constraints = null,
+        JsonElement? dimensions = null,
+        CancellationToken ct = default)
+    {
+        return Guard(() =>
+        {
+            _license.EnsureValid("create_parametric_sketch");
+            var p = new Dictionary<string, object?> { ["geometry"] = geometry };
+            if (!string.IsNullOrWhiteSpace(name)) p["name"] = name;
+            if (!string.IsNullOrWhiteSpace(plane)) p["plane"] = plane;
+            if (origin is JsonElement o) p["origin"] = o;
+            if (constraints is JsonElement c) p["constraints"] = c;
+            if (dimensions is JsonElement d) p["dimensions"] = d;
+            return _plugin.CallAsync(MethodNames.CreateParametricSketch, p, ct);
+        }, ct);
+    }
+
+    [McpServerTool(Name = "inspect_sketch")]
+    [Description("读取草图清单或单图（sketch_id 支持名/journal id/序号，缺省列全部）：原点、状态、几何记录与全部表达式（name/RHS/value/units）。")]
+    public Task<JsonElement> InspectSketch(
+        string? sketch_id = null,
+        CancellationToken ct = default)
+    {
+        return Guard(() =>
+        {
+            var p = new Dictionary<string, object?>();
+            if (!string.IsNullOrWhiteSpace(sketch_id)) p["sketch_id"] = sketch_id;
+            return _plugin.CallAsync(MethodNames.InspectSketch, p, ct);
+        }, ct);
+    }
+
+    [McpServerTool(Name = "extrude_sketch")]
+    [Description("把草图截面拉伸成实体：distance 必填 >0；start 默认 0、direction 默认 [0,0,1]（自动单位化）；sketch_id 缺省时要求全部件只有一张草图。失败自动回滚撤销点。需有效授权。")]
+    public Task<JsonElement> ExtrudeSketch(
+        double distance,
+        string? sketch_id = null,
+        double? start = null,
+        JsonElement? direction = null,
+        string? feature_name = null,
+        CancellationToken ct = default)
+    {
+        return Guard(() =>
+        {
+            _license.EnsureValid("extrude_sketch");
+            var p = new Dictionary<string, object?> { ["distance"] = distance };
+            if (!string.IsNullOrWhiteSpace(sketch_id)) p["sketch_id"] = sketch_id;
+            if (start is double s) p["start"] = s;
+            if (direction is JsonElement d) p["direction"] = d;
+            if (!string.IsNullOrWhiteSpace(feature_name)) p["feature_name"] = feature_name;
+            return _plugin.CallAsync(MethodNames.ExtrudeSketch, p, ct);
+        }, ct);
+    }
+
+    [McpServerTool(Name = "set_feature_expression")]
+    [Description("改特征/草图表达式右值并立即更新：expression_id 支持表达式名、journal id 或特征表达式序号；更新失败（error/过期）自动回滚，返回 old/new 对照。把尺寸命名成可读销轴直径/长度表达式的落点。需有效授权。")]
+    public Task<JsonElement> SetFeatureExpression(
+        string feature_id,
+        string expression_id,
+        string right_hand_side,
+        CancellationToken ct = default)
+    {
+        return Guard(() =>
+        {
+            _license.EnsureValid("set_feature_expression");
+            var p = new Dictionary<string, object?>
+            {
+                ["feature_id"] = feature_id,
+                ["expression_id"] = expression_id,
+                ["right_hand_side"] = right_hand_side,
+            };
+            return _plugin.CallAsync(MethodNames.SetFeatureExpression, p, ct);
+        }, ct);
+    }
+
     /// <summary>
     /// SDK 2.2.0 会把工具异常吞成 "An error occurred invoking ..."。这里对齐 NX-MCP 约定：
     /// 失败转成可读 JSON 载荷 {ok:false,error,error_type} 交给 Agent 判读，而不是丢协议错误。

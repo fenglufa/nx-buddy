@@ -32,6 +32,11 @@ internal static partial class ToolService
             case MethodNames.ResolveTopology: return ResolveTopology(p);
             case MethodNames.InspectFeature: return InspectFeature(p);
             case MethodNames.RebuildWorkPart: return RebuildWorkPart();
+            case MethodNames.CreateBlock: return CreateBlock(p);
+            case MethodNames.CreateParametricSketch: return CreateParametricSketch(p);
+            case MethodNames.InspectSketch: return InspectSketch(p);
+            case MethodNames.ExtrudeSketch: return ExtrudeSketch(p);
+            case MethodNames.SetFeatureExpression: return SetFeatureExpression(p);
             default:
                 throw new NotSupportedException($"unknown method: '{method}' (not implemented yet)");
         }

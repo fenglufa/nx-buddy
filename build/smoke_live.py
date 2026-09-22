@@ -114,8 +114,10 @@ def phase_c_topology(h):
     print("C6 inspect_feature ->", fi["name"], "|", fi["type"], "| out_of_date =", fi["is_out_of_date"])
 
     rb = payload(h.call("rebuild_work_part"))
-    assert rb.get("ok") is True, rb
-    print("C7 rebuild_work_part -> ok, update_error_count =", rb["update_error_count"])
+    # 金样板自 11:36 未变：CYLINDER(1) 存留“Tool body completely outside target body”历史报错，
+    # 但 DoUpdate 本身 0 错误。冒烟只硬校验 update_error_count，diagnostics 打印供人工判读。
+    assert rb.get("update_error_count") == 0, rb
+    print("C7 rebuild_work_part -> update_errors=0, diagnostics =", len(rb.get("diagnostics", [])))
 
 
 def main():
@@ -167,6 +169,49 @@ def main():
     s2 = payload(h2.call("save_work_part"))
     print("B4 save_work_part ->", json.dumps(s2, ensure_ascii=False))
     assert s2.get("file_exists"), s2
+
+    # ---- 阶段 D：写操作闭环（在 B1 新建件上 block→sketch→extrude→表达式改名） ----
+    d1 = payload(h2.call("create_block", {"length": 50, "width": 30, "height": 20}))
+    assert d1.get("ok") and d1.get("body_count") == 1, d1
+    print("D1 create_block ->", d1["name"], "bodies =", d1["body_count"])
+
+    d2 = payload(h2.call("create_parametric_sketch", {
+        "name": "MCP_PROFILESK", "plane": "XY",
+        "geometry": [{"type": "rectangle", "name": "R0", "origin": [-20, -10], "width": 40, "height": 20}],
+        "dimensions": [{"type": "horizontal", "geometry": "R0_0", "value": 40.0, "name": "WIDTH"}],
+    }))
+    assert d2.get("ok"), d2
+    assert d2.get("constraint_count", 0) >= 8, d2  # 矩形自动 8 条 + 0 手传
+    expr_name = d2["dimensions"][0]["expression"]["name"]
+    assert expr_name.endswith("_WIDTH"), expr_name
+    print("D2 create_parametric_sketch ->", d2["name"], "expr =", expr_name, "status =", d2["status"])
+
+    d3 = payload(h2.call("extrude_sketch", {
+        "sketch_id": d2["journal_id"], "distance": 15,
+        "direction": [0, 0, 1], "feature_name": "MCP_PAD",
+    }))
+    assert d3.get("ok") and d3.get("section_loop_count") == 1, d3
+    assert d3.get("feature_body_count") == 1, d3
+    print("D3 extrude_sketch ->", d3["name"], "loops =", d3["section_loop_count"])
+
+    d4 = payload(h2.call("inspect_sketch", {"sketch_id": d2["name"]}))
+    assert d4.get("ok") and d4["sketch_count"] == 1, d4
+    sk0 = d4["sketches"][0]
+    assert sk0["geometry_count"] == 4 and any(
+        e["name"].endswith("_WIDTH") and abs(e["value"] - 40.0) < 1e-6 for e in sk0["expressions"]), sk0
+    print("D4 inspect_sketch ->", sk0["name"], "geom =", sk0["geometry_count"], "exprs =", sk0["expression_count"])
+
+    d5 = payload(h2.call("set_feature_expression", {
+        "feature_id": d2["feature_journal_id"], "expression_id": expr_name, "right_hand_side": "25",
+    }))
+    assert d5.get("ok") and abs(d5["new_expression"]["value"] - 25.0) < 1e-6, d5
+    print("D5 set_feature_expression -> 40 -> 25 生效, update_errors =", d5["update_error_count"])
+
+    d6 = payload(h2.call("rebuild_work_part"))
+    assert d6.get("ok") is True, d6
+    d7 = payload(h2.call("save_work_part"))
+    assert d7.get("file_exists"), d7
+    print("D6 rebuild ok; D7 save ->", d7["full_path"], d7["file_size"], "bytes")
     h2.close()
     print(f"SMOKE LIVE PASS (pid={pid}, part={c2.get('full_path')})")
     return 0

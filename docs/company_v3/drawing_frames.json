@@ -1,0 +1,18 @@
+{
+  "standard": "company_v3",
+  "allowed_frame_ids": [
+    "FRAME_A0_V3",
+    "FRAME_A1_V3",
+    "FRAME_A2_V3",
+    "FRAME_A3_V3",
+    "FRAME_A4_V3"
+  ],
+  "allowed_template_names": [
+    "公司图框A0",
+    "公司图框A1",
+    "公司图框A2",
+    "公司图框A3",
+    "公司图框A4"
+  ],
+  "required_title_block_fields": ["drawing_no", "revision", "title", "material", "scale", "drawn_by", "date"]
+}

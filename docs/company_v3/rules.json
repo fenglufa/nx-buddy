@@ -1,0 +1,177 @@
+{
+  "standard": "company_v3",
+  "version": "3.0.0",
+  "unit": "mm",
+  "default_enforcement": "block",
+  "rules": [
+    {
+      "id": "HOLE-DIA-001",
+      "group": "孔",
+      "name": "光孔直径必须属于标准系列",
+      "severity": "fail",
+      "applies_to": ["model_hole", "drawing_hole_callout"],
+      "ref": "hole_series.simple_through_holes / simple_blind_holes",
+      "logic": "直径精确匹配系列；否则 fail，返回邻近两个标准值"
+    },
+    {
+      "id": "HOLE-BOLT-002",
+      "group": "孔",
+      "name": "螺栓通孔须匹配公称螺纹",
+      "severity": "fail",
+      "applies_to": ["hole_marked_as_clearance"],
+      "ref": "hole_series.clearance_holes_for_metric_bolt",
+      "logic": "若注释或属性含 M6/M8 等，直径必须等于中等或粗制通孔"
+    },
+    {
+      "id": "HOLE-THD-003",
+      "group": "孔",
+      "name": "螺纹孔规格白名单",
+      "severity": "fail",
+      "applies_to": ["threaded_hole"],
+      "ref": "hole_series.thread_holes",
+      "logic": "仅允许 M3–M16 清单中的粗牙标记"
+    },
+    {
+      "id": "HOLE-DUP-004",
+      "group": "孔",
+      "name": "相同直径孔应使用特征阵列或孔集",
+      "severity": "warn",
+      "applies_to": ["model_hole"],
+      "logic": "同直径且数量≥4 的独立孔特征给警告（V1 不强制改模型）"
+    },
+    {
+      "id": "SKETCH-001",
+      "group": "草图",
+      "name": "用于成型的草图必须已完成",
+      "severity": "fail",
+      "applies_to": ["extrude", "revolve"],
+      "logic": "目标草图状态不是 Finished 则禁止成型"
+    },
+    {
+      "id": "SKETCH-002",
+      "group": "草图",
+      "name": "草图不得使用过时的固定尺寸单位混用",
+      "severity": "fail",
+      "applies_to": ["sketch"],
+      "logic": "零件单位与草图尺寸单位不一致则失败"
+    },
+    {
+      "id": "FEAT-EXT-001",
+      "group": "特征",
+      "name": "拉伸距离必须为正且有限",
+      "severity": "fail",
+      "applies_to": ["extrude"],
+      "logic": "distance>0 且为有限数字"
+    },
+    {
+      "id": "FEAT-FILLET-002",
+      "group": "特征",
+      "name": "圆角半径建议系列",
+      "severity": "warn",
+      "applies_to": ["blend"],
+      "logic": "半径建议 0.5/1/1.5/2/3/5；不在系列则警告"
+    },
+    {
+      "id": "BODY-001",
+      "group": "实体",
+      "name": "工作件至少包含一个实体",
+      "severity": "fail",
+      "applies_to": ["part"],
+      "logic": "审图时 solid body 数量为 0 则失败（空图）"
+    },
+    {
+      "id": "BODY-002",
+      "group": "实体",
+      "name": "不得存在未隐藏的多余片体当零件交付",
+      "severity": "warn",
+      "applies_to": ["part"],
+      "logic": "sheet body>0 且未命名为工艺辅助则警告"
+    },
+    {
+      "id": "FRAME-001",
+      "group": "工程图",
+      "name": "必须使用公司图框模板",
+      "severity": "fail",
+      "applies_to": ["drawing_sheet"],
+      "ref": "drawing_frames.allowed_frame_ids",
+      "logic": "图框 id 或模板名不在白名单则失败"
+    },
+    {
+      "id": "TITLE-001",
+      "group": "工程图",
+      "name": "标题栏必填字段完整",
+      "severity": "fail",
+      "applies_to": ["title_block"],
+      "ref": "drawing_frames.required_title_block_fields",
+      "logic": "任一必填为空则失败"
+    },
+    {
+      "id": "TITLE-002",
+      "group": "工程图",
+      "name": "图号编码格式",
+      "severity": "fail",
+      "applies_to": ["title_block"],
+      "ref": "part_number_pattern.drawing_no_regex",
+      "logic": "图号须匹配 P-#####-##"
+    },
+    {
+      "id": "TITLE-003",
+      "group": "工程图",
+      "name": "版本号格式",
+      "severity": "fail",
+      "applies_to": ["title_block"],
+      "ref": "part_number_pattern.revision_regex",
+      "logic": "如 A 或 A.2"
+    },
+    {
+      "id": "TITLE-004",
+      "group": "工程图",
+      "name": "材料必须在白名单",
+      "severity": "fail",
+      "applies_to": ["title_block"],
+      "ref": "part_number_pattern.material_whitelist",
+      "logic": "材料字符串精确匹配白名单"
+    },
+    {
+      "id": "LAYER-001",
+      "group": "图层",
+      "name": "禁止使用未登记图层",
+      "severity": "fail",
+      "applies_to": ["drawing", "model_layer"],
+      "ref": "layers.allowed_layers",
+      "logic": "对象所在层不在允许列表且属于 forbidden 则失败，其他未知层警告"
+    },
+    {
+      "id": "LAYER-002",
+      "group": "图层",
+      "name": "尺寸必须在 DIM 层",
+      "severity": "fail",
+      "applies_to": ["drawing_dimension"],
+      "ref": "layers.dimension_must_on"
+    },
+    {
+      "id": "DIM-001",
+      "group": "尺寸",
+      "name": "关键外形尺寸不得缺失（包围盒三向）",
+      "severity": "warn",
+      "applies_to": ["drawing"],
+      "logic": "V1：若能读包围盒，检查是否存在接近长宽高的线性尺寸；否则警告待人工"
+    },
+    {
+      "id": "VIEW-001",
+      "group": "工程图",
+      "name": "至少包含一个投影视图",
+      "severity": "fail",
+      "applies_to": ["drawing_sheet"],
+      "logic": "sheet 上视图数为 0 则失败"
+    },
+    {
+      "id": "FILE-001",
+      "group": "文件",
+      "name": "审图文件必须位于配置的工作区根下",
+      "severity": "fail",
+      "applies_to": ["batch_review"],
+      "logic": "路径逃逸、盘符跳跃一律拒绝"
+    }
+  ]
+}

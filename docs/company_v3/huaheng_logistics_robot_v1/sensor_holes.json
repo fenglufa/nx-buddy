@@ -1,0 +1,8 @@
+{
+  "standard": "huaheng_logistics_robot_v1",
+  "placeholder": true,
+  "unit": "mm",
+  "allowed_clearance": [4.5, 5.5, 6.6],
+  "allowed_thread": ["M4", "M5", "M6"],
+  "notes": "只卡安装孔径，不查激光视野。"
+}

@@ -1,0 +1,18 @@
+{
+  "standard": "company_v3",
+  "unit": "mm",
+  "simple_through_holes": [6, 6.6, 7, 8, 8.5, 9, 10, 11, 13, 14, 17, 18, 21, 22],
+  "simple_blind_holes": [6, 8, 10, 12, 13, 16, 20],
+  "clearance_holes_for_metric_bolt": {
+    "M3": { "medium": 3.4, "coarse": 3.6 },
+    "M4": { "medium": 4.5, "coarse": 4.8 },
+    "M5": { "medium": 5.5, "coarse": 5.8 },
+    "M6": { "medium": 6.6, "coarse": 7.0 },
+    "M8": { "medium": 9.0, "coarse": 10.0 },
+    "M10": { "medium": 11.0, "coarse": 12.0 },
+    "M12": { "medium": 13.5, "coarse": 14.5 },
+    "M16": { "medium": 17.5, "coarse": 18.5 }
+  },
+  "thread_holes": ["M3", "M4", "M5", "M6", "M8", "M10", "M12", "M16"],
+  "notes": "13.2 等中间值一律失败，建议就近系列并提示是否应为螺栓通孔"
+}

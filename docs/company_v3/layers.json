@@ -1,0 +1,18 @@
+{
+  "standard": "company_v3",
+  "allowed_layers": [
+    "0",
+    "OUTLINE",
+    "HIDDEN",
+    "CENTER",
+    "DIM",
+    "TEXT",
+    "HATCH",
+    "TITLE",
+    "FRAME",
+    "PMI"
+  ],
+  "forbidden_layers": ["DEFAULT", "LAYER_1", "随机层", "Layer1"],
+  "dimension_must_on": ["DIM"],
+  "frame_must_on": ["FRAME", "TITLE"]
+}

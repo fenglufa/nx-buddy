@@ -1,0 +1,7 @@
+{
+  "standard": "huaheng_logistics_robot_v1",
+  "placeholder": true,
+  "unit": "mm",
+  "pin_diameters": [10, 12, 16, 20, 25, 30, 35, 40],
+  "notes": "货叉铰点/轮轴占位系列。"
+}

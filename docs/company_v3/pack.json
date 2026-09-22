@@ -1,0 +1,15 @@
+{
+  "id": "company_v3",
+  "version": "3.1.0",
+  "unit": "mm",
+  "default_enforcement": "block",
+  "subpacks": [
+    {
+      "id": "huaheng_logistics_robot_v1",
+      "version": "1.0.0",
+      "path": "huaheng_logistics_robot_v1",
+      "enabled_by_default": true,
+      "description": "华恒智能仓储结构件与物流机器人机械本体"
+    }
+  ]
+}

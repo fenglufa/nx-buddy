@@ -1,0 +1,7 @@
+{
+  "standard": "huaheng_logistics_robot_v1",
+  "placeholder": true,
+  "unit": "mm",
+  "allowed_thickness": [3, 4, 5, 6, 8, 10, 12, 14, 16, 20, 25],
+  "notes": "占位。用客户板厚表替换。"
+}

@@ -1,0 +1,35 @@
+{
+  "standard": "huaheng_logistics_robot_v1",
+  "placeholder": true,
+  "unit": "mm",
+  "patterns": [
+    {
+      "id": "DRIVE_FLANGE_A",
+      "name": "占位-驱动法兰A",
+      "pcd": 80,
+      "hole_count": 4,
+      "hole_diameter": 9.0,
+      "bolt": "M8",
+      "center_bore": 40
+    },
+    {
+      "id": "DRIVE_FLANGE_B",
+      "name": "占位-驱动法兰B",
+      "pcd": 100,
+      "hole_count": 4,
+      "hole_diameter": 11.0,
+      "bolt": "M10",
+      "center_bore": 50
+    },
+    {
+      "id": "STEER_WHEEL_C",
+      "name": "占位-舵轮安装C",
+      "pcd": 120,
+      "hole_count": 6,
+      "hole_diameter": 11.0,
+      "bolt": "M10",
+      "center_bore": 0
+    }
+  ],
+  "notes": "占位。用客户 2~3 个真实法兰图替换。"
+}

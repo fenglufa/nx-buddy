@@ -1,0 +1,63 @@
+{
+  "standard": "huaheng_logistics_robot_v1",
+  "version": "1.0.0",
+  "placeholder": true,
+  "rules": [
+    {
+      "id": "PLATE-THK-001",
+      "group": "板材",
+      "name": "板厚必须属于公司系列",
+      "severity": "fail",
+      "ref": "plate_thickness.allowed_thickness"
+    },
+    {
+      "id": "STEEL-PROF-001",
+      "group": "型钢",
+      "name": "型钢/方管规格必须在清单中",
+      "severity": "warn",
+      "ref": "steel_profiles"
+    },
+    {
+      "id": "WELD-ANN-001",
+      "group": "焊接",
+      "name": "工程图应有焊缝符号",
+      "severity": "warn",
+      "ref": "weld_policy"
+    },
+    {
+      "id": "BOM-BUY-001",
+      "group": "明细",
+      "name": "外购件名称应能匹配词典",
+      "severity": "warn",
+      "ref": "purchased_parts"
+    },
+    {
+      "id": "FLANGE-PCD-001",
+      "group": "孔组",
+      "name": "驱动/舵轮法兰孔组须匹配样本",
+      "severity": "fail",
+      "ref": "flange_patterns",
+      "tools": ["inspect_hole_pattern"]
+    },
+    {
+      "id": "PIN-BORE-001",
+      "group": "孔",
+      "name": "销轴/轮轴孔径须在系列内",
+      "severity": "fail",
+      "ref": "pin_bore.pin_diameters"
+    },
+    {
+      "id": "SENSOR-HOLE-001",
+      "group": "孔",
+      "name": "传感器安装孔仅允许 M4/M5/M6 通孔系列",
+      "severity": "warn",
+      "ref": "sensor_holes"
+    },
+    {
+      "id": "EDGE-SAFE-001",
+      "group": "安全",
+      "name": "移动设备外轮廓建议倒钝或圆角",
+      "severity": "warn"
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "standard": "huaheng_logistics_robot_v1",
+  "placeholder": true,
+  "drawing_must_have_weld_symbol": true,
+  "severity_if_missing": "warn",
+  "notes": "客户确认强制出图标注焊缝后改为 fail。"
+}

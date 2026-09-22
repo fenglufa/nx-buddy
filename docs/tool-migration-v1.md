@@ -9,11 +9,12 @@
 | 分组 | 处理方式 | 数量 |
 |------|----------|------|
 | §9.1 保留（对标 Hub） | **移植**：C# 重写，语义与 NX-MCP 对应 `_op_` 接近 | 19 |
+| §9.1 外补充（客户已确认纳入 V1） | `move_object`（回读护栏样板） | 1 |
 | §9.2 新增（Hub 无） | **新做**：授权、审图长任务、图纸/属性抽取、定向撤销 | 14 |
 | §9.3 推迟（V1.1） | 本轮**不做**，仅登记边界（revolve/sweep/loft/boolean/pattern/mirror/shell/import/装配全家/工程图创建） | — |
 | §9.4 不做 | 明确排除：曲面、钣金、`create_involute_gear`、`run_python`、全部 CAM/机床/仿真 | — |
 
-V1 交付集 = §9.1 + §9.2 = **33 个工具**。
+V1 交付集 = §9.1 + §9.2 + `move_object` = **34 个工具**（客户 2026-09-22 确认：`move_object` 进 V1）。
 
 ---
 
@@ -61,7 +62,7 @@ V1 交付集 = §9.1 + §9.2 = **33 个工具**。
 
 ---
 
-## 2. §9.1 保留工具逐一对齐（19）
+## 2. §9.1 保留工具逐一对齐（19）+ `move_object`
 
 图例：**保留=可直接移植**；护栏列指 §1.2 是否适用；规则列指 commit 前需过的 company_v3 规则。
 
@@ -85,9 +86,10 @@ V1 交付集 = §9.1 + §9.2 = **33 个工具**。
 | 16 | `fillet_edges` | `_op_fillet_edges` | `CreateEdgeBlendBuilder`+`CreateRuleEdgeDumb`+`AddChainset(collector, radiusStr)` | 写 | `FEAT-FILLET-002`（R 建议系列，warn 级不阻断） |
 | 17 | `chamfer_edges` | `_op_chamfer_edges` | `CreateChamferBuilder`+`SmartCollector`+`Option=SymmetricOffsets`+`First/SecondOffsetExp.RightHandSide` | 写 | 可选倒角系列校验 |
 | 18 | `export_exchange` | `_op_export_exchange` | `DexManager.CreateStepCreator/CreateParasolidExporter`+`ProcessHoldFlag`+回读文件 size | 写 | 仅工作区内 STEP（PRD §9.1 限定）；`FILE-001` |
-| 19 | `move_object` | `_op_move_object` | `CreateMoveBodyBuilder`+`CreateRuleBodyDumb`+`Motion.Option=DeltaXyz`+`DeltaXc/Yc/Zc.RightHandSide=repr`+**包围盒位移回读否则回滚** | 写 | §1.2/§1.4 回读护栏的**教科书样板**（本项目里作为其它写 op 的模板） |
+| 19 | `inspect_drawing_annotations` | `_op_inspect_drawing_annotations` | 遍历 `Part.DraftingSheets`→sheet.Annotations（尺寸/注释/中心标记），提取文本与测量值 | 读 | 审图抽取端，配合 §3 `inspect_*` 与规则 `DRAW-*` |
+| 20 | `move_object` | `_op_move_object` | `CreateMoveBodyBuilder`+`CreateRuleBodyDumb`+`Motion.Option=DeltaXyz`+`DeltaXc/Yc/Zc.RightHandSide=repr`+**包围盒位移回读否则回滚** | 写 | §1.2/§1.4 回读护栏的**教科书样板**（本项目里作为其它写 op 的模板） |
 
-> 注：`move_object` 在 PRD §9 未显式列出。建议**纳入 V1 保留集**（作为回读护栏范式的实现与验收样例），若产品不需要实体平移可降级——见 §5 待确认。
+> 注：`move_object` 在 PRD §9 未显式列出；客户 2026-09-22 已确认**纳入 V1**（作为回读护栏范式的实现与验收样例），故 V1 = 34。
 
 ---
 
@@ -142,15 +144,17 @@ V1 交付集 = §9.1 + §9.2 = **33 个工具**。
 
 按"先跑通骨架 → 再补读 → 再补写 → 最后审图长任务"推进，每批一个可验证闭环、独立提交：
 
-1. **骨架**：三组件解决方案（`NxAssistant` 托盘 net8 / `NxAssistant.Mcp` 宿主 net8 + 官方 ModelContextProtocol NuGet / `NxAssistant.NxPlugin` net48 NXOpen 插件）+ 本机 IPC（命名管道，令牌）+ 装/载插件不覆盖 NX-MCP。**跑通 `ping` 一条链**（Agent→MCP→IPC→插件→NX→回）。
+1. **骨架**：三组件解决方案（`NxAssistant` 托盘 net8 / `NxAssistant.Mcp` 宿主 net8 + 官方 ModelContextProtocol NuGet / `NxAssistant.NxPlugin` net48 NXOpen 插件）+ 本机 IPC（命名管道，令牌）。客户已确认旧 NX-MCP 桥可删除、无需共存，插件直接部署到 startup 目录即可。**跑通 `ping` 一条链**（Agent→MCP→IPC→插件→NX→回）。
 2. **授权**：`license_status` + 签发工具（独立 `licensing/` 文件夹，私钥不进客户包）+ create/review 的 `LICENSE_INVALID` 闸门。
 3. **读工具**：`get_part_summary`、`inspect_*`、`resolve_topology`（含 stable_id 体系）、`rebuild_work_part`、`save_work_part`、`create_part`、`export_exchange`。
 4. **写工具 + 规则引擎**：`create_block`→`extrude_sketch`→`create_cylindrical_hole`（+ commit 前规则拦截，φ13.2 金样）→`create_parametric_sketch`/`inspect_sketch`→`fillet`/`chamfer`→`set_feature_expression`→`move_object`（回读样板）。规则引擎读 company_v3 JSON。
 5. **审图长任务**：`review_folder`/`review_status`/`review_findings`（run_id 状态机 + xlsx 报告）+ 抽取类 `inspect_*`（title_block/sheet/layers/weld/parts_list/thickness/hole_pattern）+ `undo_last_assistant_change`。
 6. **测试图纸集**：在 `test/`（新建）用工具造样件——全通过件、φ13.2 失败件、错误图框件、缺字段件等（`CHECKLIST_20.md` 建议），`.prt` 保留不删，作为验收金样。
 
+### 已确认（客户 2026-09-22 决策）
+- `move_object` **进 V1**（V1 共 34 个工具）。
+- 审图报告 xlsx 生成库 = **ClosedXML**（MIT）。
+- 旧 NX-MCP 桥**可删除**，不需要共存；插件直接部署到 NX startup 目录。
+
 ### 待确认（实现到相应批次前问）
-- `move_object` 是否进 V1（PRD §9 未列，但作为回读护栏样板价值高）。
-- 官方 `ModelContextProtocol` NuGet 的宿主目标框架：net8.0（需 SDK，已装）。
-- 审图报告 xlsx 生成库选型（`ClosedXML`/`EPPlus`；注意许可）。
 - 华恒真实图框 id、板厚/型钢/法兰正式表（客户提供前用可配占位）。

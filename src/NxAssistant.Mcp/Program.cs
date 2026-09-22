@@ -46,7 +46,7 @@ public sealed class NxTools
     }
 
     [McpServerTool(Name = "license_status")]
-    [Description("读取离线授权状态（有效/过期/未绑机/未安装）。骨架批尚未接入验签，返回占位状态。")]
+    [Description("读取离线授权状态：验签/验期/绑机结果，含 lic_id、客户、有效期、剩余天数、机器指纹。create/review 类工具未授权时返回 LICENSE_INVALID。")]
     public JsonElement LicenseStatus()
     {
         return _license.Status();

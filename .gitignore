@@ -24,6 +24,11 @@ secrets/
 *.key
 *.pfx
 appsettings.Local.json
+# 真正的签发私钥目录永不入库；仅 licensing/testdata 下的测试密钥作为夹具提交
+licensing/keys/
+*.pem
+!licensing/testdata/*.pem
+!src/NxAssistant.Licensing/Keys/trusted_public.pem
 
 # 测试运行期产物（测试 .prt 图纸要保留，只忽略临时/日志）
 *.log

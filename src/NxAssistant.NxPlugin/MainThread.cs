@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Windows.Forms;
 
@@ -45,13 +46,28 @@ internal static class MainThread
         if (!pump.IsHandleCreated)
             _ = pump.Handle;
         // 不用 Control.Invoke：主线程若被模态对话框卡住会永挂。BeginInvoke + 等待句柄可超时。
-        // 闭包本体在主线程消息循环里执行；其中抛出的异常由 EndInvoke 回传到调用线程。
-        Func<object> remote = () => fn()!;
+        // 关键：.NET Framework 的 WinForms 会把 BeginInvoke 回调里逃逸的异常额外送进
+        // Application.OnThreadException——NX 主进程弹 JIT 调试对话框。因此闭包内必须捕获异常，
+        // 回到工作线程后再用 ExceptionDispatchInfo 原样重抛（保留栈），主线程消息泵零异常。
+        var box = new RemoteBox();
+        Action remote = () =>
+        {
+            try { box.Value = fn(); }
+            catch (Exception ex) { box.Error = ex; }
+        };
         var ar = pump.BeginInvoke(remote, Array.Empty<object>());
         if (!ar.AsyncWaitHandle.WaitOne(timeoutMs))
             throw new TimeoutException(
-                $"NX 主线程 {timeoutMs / 1000}s 内未响应（可能有模态对话框待处理）；该操作稍后可能仍会执行，请勿盲目重试。");
-        return (T)pump.EndInvoke(ar);
+                $"NX 主线程 {timeoutMs / 1000}s 内未响应（可能有模态对话框待处理）；该操作稍后仍可能执行，请勿盲目重试。");
+        pump.EndInvoke(ar);
+        if (box.Error != null) ExceptionDispatchInfo.Capture(box.Error).Throw();
+        return (T)(object)box.Value!;
+    }
+
+    private sealed class RemoteBox
+    {
+        public object? Value;
+        public Exception? Error;
     }
 
     public static object Run(Func<object> fn) => Run<object>(fn);

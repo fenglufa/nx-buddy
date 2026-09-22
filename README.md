@@ -37,6 +37,9 @@ dotnet run --project tests/NxAssistant.Rules.Tests
 python build/smoke_installer.py
 pwsh build/installer/install.ps1      # 真装：%LOCALAPPDATA%\Programs\NXAssistant + 自启 + startup 合并部署
 pwsh build/installer/uninstall.ps1    # 按 install.json 清单卸载；用户数据保留
+# Inno Setup 壳（双击体验 + 卸载登记；需先 winget install JRSoftware.InnoSetup 或装到 Program Files）：
+pwsh build/make_installer.ps1         # 编译 dist\installer\NXAssistant-Setup-<ver>.exe（-Pfx 预留签名钩子）
+python build/smoke_iss.py             # /VERYSILENT 装卸端到端冒烟（同样只碰假 UGII 目录）
 ```
 
 ## 当前进度
@@ -64,11 +67,13 @@ stdio 冒烟通过（`tools/list` 暴露 `ping`、`license_status`）。
 
 **安装包骨架批次（第十二片）**：`build/installer/install.ps1` + `uninstall.ps1` 把 PRD §7.1 的"Windows 安装程序"先兑现成**免 UAC 的用户级脚本安装**（正式 MSI/EXE 壳待选型，包装逻辑已可复用）。装：三组件进 `%LOCALAPPDATA%\Programs\NXAssistant`（`mcp\`、`tray\`、`nx_plugin\`），**规则包随宿主**复制到 `mcp\company_v3`——独立安装态下这是宿主规则解析链（env > settings.json > 同目录 > docs 祖先）唯一可靠落点，缺了会 fail-closed 拒掉所有受守卫写；托盘登记 `HKCU Run` 自启；startup 插件部署**复用 `deploy_plugin.ps1` 的合并语义**（只复制、绝不删他人文件，NX 占用则暂存），且安装器调的是随装副本、脱离仓库可用；`install.json` 记录安装清单。**卸载=清单驱动**：无 `install.json` 或 target 不匹配即拒删（防误指他人目录），startup 插件文件默认保留、`-RemovePluginFiles` 才按清单逐个清；`settings.json`/license/runs/workspace 属用户数据一律不动。**实机端到端冒烟**（`build/smoke_installer.py`：假 UGII 目录装→三组件+规则包+脚本落位、Run 值精确匹配、插件进假 startup→**安装态宿主跑通 stdio 33 工具**、安装态托盘 `rules_dir` 解析到随装包→按清单卸载全清→无清单目录拒删防呆；不碰真机 `%UGII_USER_DIR%`/注册表既有值）。
 
+**Inno Setup 壳（第十二片续）**：选型定案 Inno（用户级免 UAC 与脚本安装器同口径；MSIX 虚拟文件系统与"NX 从真实 startup 加载 DLL"根本冲突，Squirrel 面向 Electron 自动更新，真 MSI 仅在客户 IT 强要求时走 WiX 迁移）。`build/installer/installer.iss` 只做"双击体验 + 卸载登记"，**业务逻辑零重实现**：三组件+规则包由 `[Files]` 落位（与 install.ps1 同布局），HKCU Run 走 `[Registry]`（`uninsdeletevalue` 自动撤销），startup 部署挂 `[Tasks] deployplugin`（`Check: UgiiDirExists`），安装后由 `[Code] CurStepChanged` 调**随装的** `deploy_plugin.ps1`（合并语义原样复用）；卸载由 `CurUninstallStepChanged` 按 `{app}\nx_plugin` 的 DLL 名单**逐个对名删** startup 同名文件——清单外文件（他人插件）绝不触碰。`build/make_installer.ps1` 自动定位 ISCC（Program Files 或 winget 用户目录），预留 `-Pfx` 签名钩子（证书采购后启用）。**实机端到端冒烟**（`build/smoke_iss.py`：编出 `dist\installer\NXAssistant-Setup-1.0.0.exe`→`/VERYSILENT /TASKS=deployplugin` 装进临时目录→11 个插件 DLL+规则包落位、Run 值精确、假 startup 部署且预埋的第三方 DLL 未动→安装态托盘 `rules_dir` 命中随装包→`unins000 /VERYSILENT` 目录/Run 值/同名 startup DLL 全清、**第三方 DLL 存活**）。
+
 待办（按 `tool-migration-v1.md` §5 分批）：
 - 读/写工具批次（续）：`shell_body`/`mirror_feature` 等按需排期（`import_exchange` 已随第八片落地，见上）。
 - 工程图类样件与校准（待客户）：真实图框 id、图层名反查通道、标题栏字段别名、焊缝/BOM 行文本、圆形孔组 PCD 容差、板厚启发在异形件上的替代口径——客户 2D 图纸样件到位后把第十片各负路径/占位逐项转正。
 - 规则占位表（待客户数据）：FLANGE-PCD/STEEL/WELD/BOM/EDGE-SAFE 的数值表目前为 placeholder，命中即标 `placeholder:true`。
-- 打包交付：`build/installer/install.ps1`/`uninstall.ps1` 用户级脚本安装已过端到端冒烟（见第十二片）；正式图形化安装包/MSI 壳与代码签名待选型。
+- 打包交付：脚本安装器（`build/installer/*.ps1`）与 Inno Setup 壳（`build/installer/installer.iss` + `build/make_installer.ps1`）均已过端到端冒烟；余下仅**代码签名**（待证书采购：OV 约千元/年、EV 免 SmartScreen 拦截，`make_installer.ps1 -Pfx` 钩子已备）。
 - 托盘观感：状态窗/设置为功能版（系统图标占位），品牌图标与文案打磨待交付设计。
 
 ## 已知约束 / 红线

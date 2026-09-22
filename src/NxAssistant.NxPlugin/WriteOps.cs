@@ -66,6 +66,63 @@ internal static partial class ToolService
         }
     }
 
+    // ---- create_cylindrical_hole（§9.1 写：AxisDiameterAndHeight 减料圆柱） ----
+    // 直径∈系列的写前守卫（HOLE-DIA-001）在宿主侧 commit 前拦截，这里保持与旧桥同语义。
+
+    private static object CreateCylindricalHole(JsonElement p)
+    {
+        var work = Work();
+        var session = Session.GetSession();
+        var target = BodyByIndex(work, (int)FiniteNum(p, "target_body_index", 0));
+        var origin = Vec3(p, "origin", new double[] { 0, 0, 0 });
+        var direction = Vec3(p, "direction", new double[] { 0, 0, -1 });
+        var magnitude = Math.Sqrt(direction.Sum(v => v * v));
+        if (magnitude <= 1e-12) throw new ArgumentException("direction must not be the zero vector");
+        direction = direction.Select(v => v / magnitude).ToArray();
+        double diameter = PositiveNum(p, "diameter", null);
+        double depth = PositiveNum(p, "depth", null);
+        var featureName = SafeObjectName(OptString(p, "feature_name") ?? string.Empty, "MCP_HOLE");
+
+        var mark = session.SetUndoMark(Session.MarkVisibility.Visible, "NXA cylindrical hole");
+        NXOpen.Features.CylinderBuilder builder = null;
+        try
+        {
+            builder = work.Features.CreateCylinderBuilder(null!);
+            builder.Type = NXOpen.Features.CylinderBuilder.Types.AxisDiameterAndHeight;
+            builder.Origin = new NXOpen.Point3d(origin[0], origin[1], origin[2]);
+            builder.Direction = new NXOpen.Vector3d(direction[0], direction[1], direction[2]);
+            builder.Diameter.RightHandSide = FmtNum(diameter);
+            builder.Height.RightHandSide = FmtNum(depth);
+            builder.BooleanOption.Type = NXOpen.GeometricUtilities.BooleanOperation.BooleanType.Subtract;
+            builder.BooleanOption.SetTargetBodies(new NXOpen.Body[] { target });
+            var feature = builder.CommitFeature();
+            feature.SetName(featureName);
+            session.SetUndoMarkName(mark, "NXA cylindrical hole");
+            return new Dictionary<string, object?>
+            {
+                ["ok"] = true,
+                ["name"] = feature.Name,
+                ["journal_id"] = feature.JournalIdentifier,
+                ["implementation"] = "subtractive_cylinder_feature",
+                ["target_body_tag"] = (long)target.Tag,
+                ["origin"] = origin.ToList(),
+                ["direction"] = direction.ToList(),
+                ["diameter"] = diameter,
+                ["depth"] = depth,
+                ["part_body_count"] = CountBodies(work),
+            };
+        }
+        catch
+        {
+            try { session.UndoToMark(mark, null); } catch { /* 尽力回滚 */ }
+            throw;
+        }
+        finally
+        {
+            try { builder?.Destroy(); } catch { /* ignore */ }
+        }
+    }
+
     // ---- create_parametric_sketch（平面/轴向 + line/rect/circle/arc + 约束 + 尺寸表达式） ----
 
     private static readonly Dictionary<string, (double[] U, double[] V, double[] N)> PrincipalPlanes = new()

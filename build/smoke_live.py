@@ -212,6 +212,32 @@ def main():
     d7 = payload(h2.call("save_work_part"))
     assert d7.get("file_exists"), d7
     print("D6 rebuild ok; D7 save ->", d7["full_path"], d7["file_size"], "bytes")
+
+    # ---- 阶段 E：create_cylindrical_hole + HOLE-DIA-001 写前守卫 ----
+    e1 = payload(h2.call("create_cylindrical_hole", {
+        "diameter": 10, "depth": 60, "origin": [25, 15, 20], "direction": [0, 0, -1],
+        "feature_name": "NXA_PH10",
+    }))
+    assert e1.get("ok") and abs(e1.get("diameter", 0) - 10) < 1e-9, e1
+    print("E1 合规 φ10 孔 ->", e1["name"], "| bodies =", e1["part_body_count"])
+
+    before = payload(h2.call("get_part_summary"))
+    e2 = payload(h2.call("create_cylindrical_hole", {
+        "diameter": 13.2, "depth": 60, "origin": [25, 15, 20], "direction": [0, 0, -1],
+    }))
+    assert e2.get("ok") is False and e2.get("error_type") == "RULE_BLOCKED", e2
+    f0 = e2["findings"][0]
+    assert f0["rule_id"] == "HOLE-DIA-001", f0
+    assert "13" in f0["suggestions"] and "14" in f0["suggestions"], f0
+    print("E2 φ13.2 被写前拦截 ->", f0["message"], "| 建议 =", f0["suggestions"])
+
+    after = payload(h2.call("get_part_summary"))
+    assert after.get("feature_count") == before.get("feature_count"), (before, after)
+    print("E3 拦截后 NX 侧零改动（feature_count =", after.get("feature_count"), "）")
+
+    e4 = payload(h2.call("save_work_part"))
+    assert e4.get("file_exists"), e4
+    print("E4 save ->", e4["full_path"], e4["file_size"], "bytes")
     h2.close()
     print(f"SMOKE LIVE PASS (pid={pid}, part={c2.get('full_path')})")
     return 0

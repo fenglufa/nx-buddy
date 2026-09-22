@@ -46,9 +46,10 @@ stdio 冒烟通过（`tools/list` 暴露 `ping`、`license_status`）。
 **读/写工具批次（第一片）**：插件侧 `MainThread`（隐藏 WinForms Control 把 NXOpen 调用 marshal 回主线程）、`AssemblyResolve` 钩子（让 ugraf AppDomain 解析同目录依赖）、工作区沙箱 `Workspace`；已接线 5 方法：`ping`/`get_part_summary`/`inspect_work_part_geometry`/`save_work_part`/`create_part`（后者受 `LICENSE_INVALID` 闸门保护）；`build/deploy_plugin.ps1` 复制产物到 startup（不删既有 DLL）。**已过 NX 2412 实机全链路**（`build/smoke_live.py`：ping→无件报错→无授权拦截→带授权 create/summary/inspect/save 闭环落盘）。
 **拓扑/特征批次（第二片）**：插件侧 `TopologyOps`（对齐 nx_remote_ops.py 的 stable_id 几何指纹：SHA1 规范化 JSON 前 20 位，save/回开重定位、失配几何回退、sort_by/occurrence/unique 语义）+ `inspect_body_topology`/`resolve_topology`/`inspect_feature`/`rebuild_work_part` 四方法宿主接线；PipeServer 断开类 IOException 不再刷日志。**已过 NX 2412 实机全绿**（smoke_live 阶段 C：金样板拓扑 8 面/16 边，stable_id 命中→回退命中同一最大面→报错路径→特征检查→重建 update_errors=0，日志 0 噪音）。
 **写操作批次（第三片）**：插件侧 `WriteOps`——`create_block`（OriginAndEdgeLengths）、`create_parametric_sketch`（XY/XZ/YZ 平面 + line/rectangle/circle/arc + 自动矩形约束 + 尺寸独立表达式）、`inspect_sketch`、`extrude_sketch`（Section+Direction，失败自动 UndoToMark 回滚）、`set_feature_expression`（改 RHS→更新→失败回滚，old/new 对照）；宿主 5 工具全走 `LICENSE_INVALID` 闸门 + Guard。**实机写闭环全绿**（smoke_live 阶段 D：create_part→block→矩形草图 WIDTH=40→拉伸→表达式改 25 生效→rebuild→save，102KB 落盘）。
+**写前守卫批次（第四片）**：`create_cylindrical_hole`（插件 `CreateCylinderBuilder` AxisDiameterAndHeight+Subtract，失败 UndoToMark 回滚；对齐旧桥语义）+ 宿主 `HostRules` 写前规则守卫：候选孔证据→`RuleEngine.Blocking`，失配系列直径（如 φ13.2）在 **转发给 NX 之前** 即返回 `RULE_BLOCKED`+邻近建议；规则包缺失时 fail-closed（`RULE_PACK_UNAVAILABLE`）。**实机全绿**（smoke_live 阶段 E：φ10 正常成孔、φ13.2 被拦且 feature_count 前后不变、save 落盘）。
 
 待办（按 `tool-migration-v1.md` §5 分批）：
-- 读/写工具批次（续）：`create_cylindrical_hole`（含写前规则守卫，φ13.2→FAIL+建议 13/14）、`fillet`/`chamfer`、`move_object`（回读样板）。
+- 读/写工具批次（续）：`fillet_edges`/`chamfer_edges`（FEAT-FILLET-002 warn 级）、`move_object`（回读样板）、`export_exchange`（工作区 STEP）。
 - 审图长任务：`review_folder`/`review_status`/`review_findings`（run_id 状态机 + xlsx 报告，xlsx 用 ClosedXML）；把规则引擎接上 NX 证据抽取，用 `test/drawings` 验收。
 - 工程图类样件（图框/标题栏/图层）：待客户确认真实图框 id 后补 2D 图纸样件。
 

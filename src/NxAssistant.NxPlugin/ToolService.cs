@@ -37,6 +37,7 @@ internal static partial class ToolService
             case MethodNames.InspectSketch: return InspectSketch(p);
             case MethodNames.ExtrudeSketch: return ExtrudeSketch(p);
             case MethodNames.SetFeatureExpression: return SetFeatureExpression(p);
+            case MethodNames.CreateCylindricalHole: return CreateCylindricalHole(p);
             default:
                 throw new NotSupportedException($"unknown method: '{method}' (not implemented yet)");
         }

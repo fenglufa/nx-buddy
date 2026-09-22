@@ -257,6 +257,38 @@ public sealed class NxTools
         }, ct);
     }
 
+    [McpServerTool(Name = "create_cylindrical_hole")]
+    [Description("在目标实体上创建减料圆柱孔（CylinderBuilder：origin+direction 轴、diameter×depth，布尔 Subtract）。提交前先过 HOLE-DIA-001 写前守卫：hole_kind=simple_through/simple_blind 的直径必须∈公司标准系列，φ13.2 这类失配直径会被拒绝并返回邻近建议值（如 13/14），NX 侧不留任何改动。需有效授权。")]
+    public Task<JsonElement> CreateCylindricalHole(
+        double diameter,
+        double depth,
+        JsonElement? origin = null,
+        JsonElement? direction = null,
+        int target_body_index = 0,
+        string hole_kind = "simple_through",
+        string? feature_name = null,
+        CancellationToken ct = default)
+    {
+        return Guard(() =>
+        {
+            _license.EnsureValid("create_cylindrical_hole");
+            if (hole_kind != "simple_through" && hole_kind != "simple_blind")
+                throw new ArgumentException("hole_kind 目前仅支持 simple_through / simple_blind（螺纹/ bolt 孔待后续切片）");
+            var blocked = HostRules.CheckHoleWrite(diameter, hole_kind);
+            if (blocked != null) return Task.FromResult(blocked.Value);
+            var p = new Dictionary<string, object?>
+            {
+                ["diameter"] = diameter,
+                ["depth"] = depth,
+                ["target_body_index"] = target_body_index,
+            };
+            if (origin is JsonElement o) p["origin"] = o;
+            if (direction is JsonElement d) p["direction"] = d;
+            if (feature_name != null) p["feature_name"] = feature_name;
+            return _plugin.CallAsync(MethodNames.CreateCylindricalHole, p, ct);
+        }, ct);
+    }
+
     /// <summary>
     /// SDK 2.2.0 会把工具异常吞成 "An error occurred invoking ..."。这里对齐 NX-MCP 约定：
     /// 失败转成可读 JSON 载荷 {ok:false,error,error_type} 交给 Agent 判读，而不是丢协议错误。

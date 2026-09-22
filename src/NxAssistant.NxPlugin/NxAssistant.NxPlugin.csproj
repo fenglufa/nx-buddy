@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- NX 2412 的 NXOpen 是 .NET Framework 程序集，插件必须 target net48，运行在 ugraf.exe 的 CLR4 AppDomain 内。 -->
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <AssemblyName>NxAssistant.NxPlugin</AssemblyName>
+    <RootNamespace>NxAssistant.NxPlugin</RootNamespace>
+    <!-- 本机未预装 net48 targeting pack，靠此包在无 VS 的机器上编译。 -->
+    <AutomaticImplicitImports>false</AutomaticImplicitImports>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <NxManaged Condition="'$(NxManaged)'=='' And '$(UGII_BASE_DIR)'!=''">$(UGII_BASE_DIR)\NXBIN\managed</NxManaged>
+    <NxManaged Condition="'$(NxManaged)'==''">E:\Siemens\NX2412\NXBIN\managed</NxManaged>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="NXOpen">
+      <HintPath>$(NxManaged)\NXOpen.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="NXOpen.Utilities">
+      <HintPath>$(NxManaged)\NXOpen.Utilities.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="System.Runtime.Remoting" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\NxAssistant.Core\NxAssistant.Core.csproj" />
+  </ItemGroup>
+
+</Project>

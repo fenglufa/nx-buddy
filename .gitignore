@@ -1,0 +1,31 @@
+# .NET build outputs
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+artifacts/
+*.user
+
+# NuGet
+*.nupkg
+packages/
+!src/**/packages.lock.json
+
+# IDE / OS
+.vs/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# 本机配置与密钥（签发私钥/授权缓存/工作区日志一律不入库）
+*.lic
+secrets/
+*.key
+*.pfx
+appsettings.Local.json
+
+# 测试运行期产物（测试 .prt 图纸要保留，只忽略临时/日志）
+*.log
+test/**/tmp/
+test/**/out/

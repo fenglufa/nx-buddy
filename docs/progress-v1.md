@@ -35,6 +35,7 @@
 | 第十四片续5 | 审图工作台任选图纸目录（自动导入副本）+ 沙箱文案白话化 | 58e4114 |
 | 第十四片续6 | 升级安装 ignoreversion 修复（Inno 同版本默认跳过致升级静默失效） | 802a98a |
 | 第十四片续7 | 托盘单实例互斥（二次启动=唤醒已有实例主页后退出） | 39491dc |
+| 第十四片续8 | 安装尾声成功不弹窗，仅部署失败/缺 UGII_USER_DIR 弹错 | 待回填 |
 
 ## 批次详记
 
@@ -185,6 +186,11 @@ Inno 默认行为=升级静默失效，ignoreversion 是必选项而非优化项
 无头模式在互斥之前返回，脚本冒烟不受影响。真机全流程验证：升级安装（ignoreversion 再次实证：装机哈希=dist）
 → 起第一实例 → 再起第二实例=秒退且第一实例主页被唤醒。新包 5,490,792B / SHA1 74bdffd240704f1deb7fdbaf8d40d2366fcbe341。
 
+**安装尾声成功不再弹窗（同日第十四片续8）**：用户裁决——插件部署成功属预期内，不该用信息框打断；
+`installer.iss` 的 `ssDone` 只在 `DeployFailed`（缺 `UGII_USER_DIR` 或部署脚本报错）时弹错误框，
+成功路径静默走完向导完成页（deploy_plugin.ps1 输出窗口本身可见）。新包 5,490,699B /
+SHA1 027e66fa66c5167489c305f7ee36b3f9ba0c9797。
+
 待办（按 `tool-migration-v1.md` §5 分批）：
 - 主页/工作台人工验收：`--ui-probe` 只证构造无异常；左键开主页、审图全流程（真 NX + 金样目录）、
   规则管理交互手感需要在开发机人检一轮后再发客户（与安装向导观感同轮）。
@@ -203,6 +209,7 @@ Inno 默认行为=升级静默失效，ignoreversion 是必选项而非优化项
 - 打包交付：脚本安装器（`build/installer/*.ps1`）与 Inno Setup 壳（`build/installer/installer.iss` + `build/make_installer.ps1`）均已过端到端冒烟；余下仅**代码签名**——2026-09-22 用户定：测试验证阶段先不采购证书（注意：nginx 用的 SSL/TLS 证书是 serverAuth 用途，不能签代码），`make_installer.ps1 -Pfx` 钩子已备。
 - 运行时前置（2026-09-22 README 整理时新发现）：当前 publish 为 **framework-dependent**（csproj 无 RuntimeIdentifier/SelfContained），裸机客户需先装 .NET 8——宿主吃 Base Runtime，托盘（WinForms）吃 **Windows Desktop Runtime**。交付前二选一：文档化前置安装，或改 `-r win-x64 --self-contained` 发布（安装包体积换免依赖）。
 - 安装向导人工验收：`smoke_iss.py` 只覆盖静默路径；双击向导（中文界面+升级免"文件占用"弹窗已随
-  第四轮落地，需人检观感；部署结果弹窗三态：成功/缺 UGII_USER_DIR/脚本报错、桌面图标、
+  第四轮落地，需人检观感；部署结果**成功不弹窗、仅失败/缺 UGII_USER_DIR 弹错误框**（续8 改，
+  需人检两分支）、桌面图标、
   真 startup 部署含 NX 占用暂存分支）需在开发机人检一轮后再发客户。
 - 托盘观感：状态窗/设置为功能版（系统图标占位），品牌图标与文案打磨待交付设计。

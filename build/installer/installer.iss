@@ -116,17 +116,13 @@ begin
                    '托盘与 MCP 宿主已安装可用。可参照上方脚本输出排查，或稍后运行：' + #13#10 + ManualCmd;
     end
     else
-      DeployMsg := 'NX 插件已合并部署进 ' + Ugii + '\startup（只复制、未删他人文件）。' + #13#10 +
-                   '保存并关闭当前工作部件后重启 NX 即生效。';
+      DeployMsg := '';  // 成功不提示（用户裁决）：脚本输出已可见，末尾窗体即完成页
   end
   else if CurStep = ssDone then
   begin
-    // 静默/IT 推送不打扰；向导模式把部署结果明说，成功也提醒重启 NX。
-    if not WizardSilent and (DeployMsg <> '') then
-      if DeployFailed then
-        MsgBox(DeployMsg, mbError, MB_OK)
-      else
-        MsgBox(DeployMsg, mbInformation, MB_OK);
+    // 静默/IT 推送不打扰；向导模式只在部署失败（含缺 UGII_USER_DIR）时弹错误框，成功不再弹窗。
+    if not WizardSilent and DeployFailed then
+      MsgBox(DeployMsg, mbError, MB_OK);
   end;
 end;
 

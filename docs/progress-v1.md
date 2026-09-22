@@ -27,6 +27,7 @@
 | 第十二片 | 脚本安装器 install/uninstall + 端到端冒烟 | 86ac0c2 |
 | 第十二片续 | Inno Setup 壳 installer.iss + 静默装卸冒烟 | ca4047c |
 | 第十三片 | 规则可见与可管理：rules_state 覆盖层 + 托盘规则管理分页 | 86fef2e |
+| 第十四片 | 审图工作台：托盘左键主页 + MCP stdio 客户端直连宿主 | 本批 |
 
 ## 批次详记
 
@@ -64,7 +65,8 @@ stdio 冒烟通过（`tools/list` 暴露 `ping`、`license_status`）。
 mtime，托盘保存后宿主**下一次受守卫写/审图即生效，无需重启**；fail-closed 语义不变（基线包缺失仍全拦，
 "禁用"≠"删除"，升级包后新规则默认启用）。`RuleDataFiles` 映射 rule_id→数据文件供 UI 反查；
 FEAT-FILLET-002 的圆角系列从 C# 硬编码移入 `fillet_series.json`（兑现"占位数值不写死"红线并让用户可改）。
-托盘"设置 → 规则管理"分页：全规则表格（启用勾选/编号/组/名称/级别/用户改动标记）+ 每规则"改参数"对话框
+托盘 →"主页"（第十三片时在"设置 → 规则管理"，第十四片起移入主页，见下）：全规则表格
+（启用勾选/编号/组/名称/级别/用户改动标记）+ 每规则"改参数"对话框
 （纯数值/字符串数组按逗号列表编辑，其余字段原样保留，整文件替换语义）+ 保存/重置 + 最近 15 条变更日志
 （回答签核报告"这条规则被谁停的"）。`--status-json` 新增 `rules_state_path/rules_disabled_count/rules_overrides_count/rules_state_latest`。
 **离线全绿**（规则金样新增 9 用例：禁用后 φ13.2 不报且螺纹仍拦、改参进系列放行、圆角改参、保存/重载、三类留痕；
@@ -72,10 +74,28 @@ FEAT-FILLET-002 的圆角系列从 C# 硬编码移入 `fillet_series.json`（兑
 真机 NX 在跑也绝不会真钻孔）；`smoke_tray.py` T4 覆盖层探测；安装态回归：`smoke_installer`（含随装包）与
 `smoke_iss` 静默装卸全绿）。V1 权限口径（2026-09-22 用户定）：自由改 + 全程留痕，不做审批链。
 
+**审图工作台 + 托盘主页批次（第十四片）**：兑现"人没有 Agent 也要能审图"与"左键图标要有主页"
+（2026-09-22 用户定前端形态 A：纯 WinForms 深化，不起 HTTP 端口）。核心决定：托盘做成 **MCP 客户端**——
+`McpHostClient` 逐行 JSON-RPC（initialize→initialized→tools/call，与 build/smoke_stdio.py 同语义）
+自拉一个**托盘专属** `NxAssistant.Mcp.exe`，审图走 review_folder/review_status/review_findings 原工具，
+**不存在第二套判定实现**：授权闸门、写前守卫、run 状态机、xlsx 报告与 Agent 完全同源。
+主页三分页：状态与操作（四态+授权详情+导入 Key/复制 MCP 配置/打开日志/报告目录/路径设置）、
+审图工作台（目录选择→发起即回 run_id→2 秒轮询进度/当前张→取消（当前张完成后生效）→续跑→
+findings 表格（列对齐金样：图号/规则/级别/对象/实测/建议/占位）→打开 审图报告.xlsx；
+顶栏下拉切换历史 run）、规则管理（第十三片 RulesTab 自设置窗迁入主页，设置窗只留路径）。
+两个跨进程护栏：① `review_status` 会把"磁盘在跑但本宿主不认识"的 run 判成 interrupted——
+因此 MCP 轮询/取消**只允许**作用于本托盘宿主自己发起的 run，他方 run 只读 run.json 展示并给出
+"去发起方取消"提示；② 发起前若探测到别的宿主有 running run（ReviewBusy）弹确认——两个宿主
+并发审图会共用 NX 插件单 worker 队列、同名部件互踩记单张失败。主页关闭=隐藏（审图继续），
+托盘"退出"=真关并 dispose 宿主（未完成 run 下次查询自动判 interrupted，可续跑）。
+无头自检：`--review-probe`（真走 stdio 客户端：license_status + 不存在 run 必回结构化错误）与
+`--ui-probe`（MainWindow 三分页构造+1.2 秒真关）入 `smoke_tray.py` T5/T6；离线全绿，
+安装态 `smoke_installer`/`smoke_iss` 复跑全绿。V1 已知边界：Agent 与托盘各持宿主进程，
+互为"他方 run"（只读可见、不可代取消）；主页人工观感验收仍欠（同安装向导一项）。
+
 待办（按 `tool-migration-v1.md` §5 分批）：
-- 审图工作台（第十四片，2026-09-22 用户定批次顺序"先规则再审图"）：托盘做 MCP **客户端**（stdio 拉起宿主），
-  设置窗加"审图"分页——选沙箱目录→`review_folder` 发起→进度/取消/续跑→findings 表→打开 xlsx，
-  与 Agent 走完全同一套工具（一份授权闸门/守卫/run 状态机）；同批确定托盘左键主页形态。
+- 主页/工作台人工验收：`--ui-probe` 只证构造无异常；左键开主页、审图全流程（真 NX + 金样目录）、
+  规则管理交互手感需要在开发机人检一轮后再发客户（与安装向导观感同轮）。
 - 规则"新增"入口：第十三片覆盖层兑现了启停/改参；全新判定逻辑属引擎扩展（随版本），纯阈值/系列差异
   引导用户走"复制 company_v3 改 JSON + `rules_dir` 指向"路线（README 已写明）。
 - 读/写工具批次（续）：`shell_body`/`mirror_feature` 等按需排期（`import_exchange` 已随第八片落地，见上）。

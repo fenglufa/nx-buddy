@@ -13,6 +13,10 @@ internal static class Program
             Console.Out.Write(StatusProbe.ToJson(StatusProbe.Read()));
             return 0;
         }
+        if (args.Contains("--review-probe"))
+            return ReviewProbe.RunAsync().GetAwaiter().GetResult();
+        if (args.Contains("--ui-probe"))
+            return UiProbe.Run();
 
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
@@ -32,6 +36,7 @@ internal sealed class TrayAppContext : ApplicationContext
     private readonly NotifyIcon _icon;
     private readonly System.Windows.Forms.Timer _timer;
     private TrayStatus _status = StatusProbe.Read();
+    private MainWindow? _main;
 
     public TrayAppContext()
     {
@@ -42,6 +47,8 @@ internal sealed class TrayAppContext : ApplicationContext
             Visible = true,
             ContextMenuStrip = BuildMenu(),
         };
+        // 左键单击=打开主页（用户反馈"只能右键体验不好"）；右键仍是快捷菜单
+        _icon.MouseClick += (_, e) => { if (e.Button == System.Windows.Forms.MouseButtons.Left) ShowMain(); };
         _timer = new System.Windows.Forms.Timer { Interval = 3000 };
         _timer.Tick += (_, _) => Refresh();
         _timer.Start();
@@ -53,14 +60,43 @@ internal sealed class TrayAppContext : ApplicationContext
         var menu = new ContextMenuStrip();
         menu.Items.Add(new ToolStripMenuItem("状态（只读）", null, (s, e) => { }) { Tag = "status" });
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add(new ToolStripMenuItem("导入授权 Key…", null, (_, _) => ImportKey()));
-        menu.Items.Add(new ToolStripMenuItem("复制 MCP 配置片段", null, (_, _) => CopySnippet()));
+        menu.Items.Add(new ToolStripMenuItem("主页…（审图工作台 / 规则管理）", null, (_, _) => ShowMain()));
+        menu.Items.Add(new ToolStripMenuItem("导入授权 Key…", null, (_, _) => TrayActions.ImportKey(_icon.ContextMenuStrip!)));
+        menu.Items.Add(new ToolStripMenuItem("复制 MCP 配置片段", null, (_, _) => TrayActions.CopyMcpConfig(_icon.ContextMenuStrip!, _status)));
         menu.Items.Add(new ToolStripMenuItem("设置…", null, (_, _) => OpenSettings()));
-        menu.Items.Add(new ToolStripMenuItem("打开插件日志", null, (_, _) => OpenPath(_status.PluginLogPath, true)));
-        menu.Items.Add(new ToolStripMenuItem("打开审图报告目录", null, (_, _) => OpenPath(_status.RunsRoot, false)));
+        menu.Items.Add(new ToolStripMenuItem("打开插件日志", null, (_, _) => TrayActions.OpenPath(_icon.ContextMenuStrip!, _status.PluginLogPath, true)));
+        menu.Items.Add(new ToolStripMenuItem("打开审图报告目录", null, (_, _) => TrayActions.OpenPath(_icon.ContextMenuStrip!, _status.RunsRoot, false)));
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add(new ToolStripMenuItem("退出", null, (_, _) => ExitThread()));
+        menu.Items.Add(new ToolStripMenuItem("退出", null, (_, _) => ExitApp()));
         return menu;
+    }
+
+    private void ShowMain()
+    {
+        try
+        {
+            if (_main is { IsDisposed: false })
+            {
+                if (!_main.Visible) _main.Show();
+                if (_main.WindowState == FormWindowState.Minimized) _main.WindowState = FormWindowState.Normal;
+                _main.Activate();
+                return;
+            }
+            _main = new MainWindow(_icon);
+            _main.FormClosed += (_, _) => _main = null;
+            _main.Show();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show("打开主页失败：" + ex.Message, "NX 小助手",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private void ExitApp()
+    {
+        _main?.RealClose();
+        ExitThread();
     }
 
     private void Refresh()
@@ -81,49 +117,6 @@ internal sealed class TrayAppContext : ApplicationContext
         return $"{lic} · {nx} · {mcp}";
     }
 
-    private void ImportKey()
-    {
-        using var dlg = new OpenFileDialog
-        {
-            Title = "选择授权 Key（.lic）",
-            Filter = "NX 小助手 Key (*.lic)|*.lic|所有文件 (*.*)|*.*",
-        };
-        if (dlg.ShowDialog() != DialogResult.OK) return;
-        try
-        {
-            var target = StatusProbe.Read().LicensePath;
-            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-            File.Copy(dlg.FileName, target, true);
-            var after = StatusProbe.Read();
-            MessageBox.Show(
-                after.Licensed
-                    ? $"Key 已导入并激活：{after.Customer}，有效至 {after.NotAfter}（剩 {after.DaysLeft} 天）。"
-                    : $"Key 已复制到 {target}，但校验未通过：{after.LicenseReason}",
-                "NX 小助手授权",
-                MessageBoxButtons.OK,
-                after.Licensed ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
-            Refresh();
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show("导入失败：" + ex.Message, "NX 小助手授权",
-                MessageBoxButtons.OK, MessageBoxIcon.Error);
-        }
-    }
-
-    private void CopySnippet()
-    {
-        try
-        {
-            Clipboard.SetText(StatusProbe.McpConfigSnippet(_status));
-            balloon("MCP 配置片段已复制到剪贴板（command 指向 " + _status.McpExe + "）。");
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show("复制失败：" + ex.Message);
-        }
-    }
-
     private void OpenSettings()
     {
         using var f = new SettingsForm(_status);
@@ -137,25 +130,12 @@ internal sealed class TrayAppContext : ApplicationContext
     private void balloon(string text) =>
         _icon.ShowBalloonTip(4000, "NX 小助手", text, ToolTipIcon.Info);
 
-    private static void OpenPath(string path, bool isFile)
-    {
-        try
-        {
-            if (isFile && !File.Exists(path)) { MessageBox.Show("文件不存在：" + path); return; }
-            if (!isFile && !Directory.Exists(path)) Directory.CreateDirectory(path);
-            var psi = isFile
-                ? new System.Diagnostics.ProcessStartInfo("explorer.exe", $"/select,\"{path}\"")
-                : new System.Diagnostics.ProcessStartInfo("explorer.exe", $"\"{path}\"");
-            System.Diagnostics.Process.Start(psi);
-        }
-        catch (Exception ex) { MessageBox.Show("打开失败：" + ex.Message); }
-    }
-
     protected override void Dispose(bool disposing)
     {
         if (disposing)
         {
             _timer.Dispose();
+            _main?.RealClose();
             _icon.Dispose();
         }
         base.Dispose(disposing);

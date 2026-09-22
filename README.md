@@ -15,9 +15,10 @@
   不合规尺寸直接拒绝并给出邻近标准值建议（如 φ13.2 → 建议 13/14）；规则包缺失时 fail-closed。
 - **规则用户态覆盖层**：内置 company_v3 规则包是只读基线（升级整目录替换），用户的启停/改参
   写进 `%LOCALAPPDATA%\NXAssistant\rules_state.json` 覆盖层，带完整变更日志；
-  托盘"设置 → 规则管理"分页可视化操作，保存后宿主下一次守卫/审图即生效（无需重启）。
+  托盘主页"规则管理"分页可视化操作，保存后宿主下一次守卫/审图即生效（无需重启）。
 - **审图长任务**：`review_folder` 批量逐张判定，产出 `审图报告.xlsx` + 机器可读 `summary.json`，
-  支持中断续跑/取消，全程不扰动用户当前工作部件。
+  支持中断续跑/取消，全程不扰动用户当前工作部件。**人不用 Agent 也能审**：托盘主页"审图工作台"
+  分页直连同一宿主（第十四片），发起/进度/取消/续跑/明细/报告全流程点选完成。
 - **可回退**：`undo_last_assistant_change` 用"具名 undo mark + 模型指纹"双校验，绝不误撤用户自己的操作。
 
 ## 架构（三组件，本机 IPC 解耦）
@@ -27,15 +28,16 @@ Agent ──stdio──► NxAssistant.Mcp (net8, 官方 ModelContextProtocol)  
                      │  命名管道 "nxassistant-mcp"：{id,method,params[,token]} / {id,ok,result|error}
                      ▼
                  NxAssistant.NxPlugin (net48, NXOpen) ──► NX 2412 (ugraf.exe 进程内)
-                     ▲
-NxAssistant.exe 托盘 ─┘（只读状态探测 + 设置窗，与宿主分离）
+                     ▲                         ▲
+NxAssistant.exe 托盘 ─┘（只读状态探测）     └──stdio── 托盘"审图工作台"：左键主页，自拉一个专属宿主，
+                                                 与 Agent 同一套工具/闸门/run 状态机（互不读写对方配置）
 ```
 
 | 项目 | 交付物 | 框架 | 职责 |
 |---|---|---|---|
 | `src/NxAssistant.Mcp` | `NxAssistant.Mcp.exe` | net8 | MCP 宿主：参数校验 / 授权闸门 / 规则引擎 / 审图编排 / 报告，经 IPC 调插件 |
 | `src/NxAssistant.NxPlugin` | `NxAssistant_NxPlugin.dll` | **net48** | 唯一直接调用 NXOpen 的层，随 NX 从 `%UGII_USER_DIR%\startup` 加载；NXOpen 是 .NET Framework 4.8 程序集，必须跑在 ugraf.exe 进程内 |
-| `src/NxAssistant.Tray` | `NxAssistant.exe` | net8-windows | 托盘 + 设置窗（PRD §6）：授权/NX 连接/MCP 在跑/审图忙碌四态，规则管理分页，`--status-json` 无头采集 |
+| `src/NxAssistant.Tray` | `NxAssistant.exe` | net8-windows | 托盘 + 左键主页（PRD §6）：四态概览、审图工作台（内置 MCP stdio 客户端，自拉宿主）、规则管理；设置窗管路径；`--status-json/--review-probe/--ui-probe` 无头自检 |
 | `src/NxAssistant.Core` | 类库 | netstandard2.0 | IPC 契约 + `NxaSettings` 统一路径解析（下见） |
 | `src/NxAssistant.Licensing` / `Rules` | 类库 | netstandard2.0 | ECDSA-P256 离线验签 / company_v3 规则引擎 |
 | `licensing/` | `nxa-keygen` | — | 签发工具（仅产品方持有，私钥不进客户包） |
@@ -117,21 +119,45 @@ pwsh build/installer/uninstall.ps1     # 按 install.json 清单卸载；-Remove
 ### 首次使用
 
 1. **授权激活**：产品方用 `licensing/` KeyGen 按客户机指纹签发 `.lic`（一 Key 一机、首激活锁机）；
-   放到 `%LOCALAPPDATA%\NXAssistant\license.lic`，或托盘右键"导入授权 Key"。过期/篡改一律 `LICENSE_INVALID`。
-2. **接入 Agent**：托盘 →"复制 MCP 配置片段"，粘进 MCP 客户端（Qoder/Claude 等）：
+   放到 `%LOCALAPPDATA%\NXAssistant\license.lic`，或托盘主页"导入授权 Key"。过期/篡改一律 `LICENSE_INVALID`。
+2. **托盘主页**：**左键单击**托盘图标打开主页（右键仍是快捷菜单）。三个分页：
+   "状态与操作"（授权/NX 连接/MCP/审图四态 + 复制 MCP 配置 + 打开日志与报告目录 + 路径设置）、
+   "审图工作台"、"规则管理"。主页右上角关闭=收回托盘，审图任务继续跑；"退出"才终止托盘
+   （并带走它自己的宿主进程）。
+3. **接入 Agent**：主页 →"复制 MCP 配置片段"，粘进 MCP 客户端（Qoder/Claude 等）：
 
    ```json
    { "mcpServers": { "nx-buddy": { "command": "C:\\Users\\<用户>\\AppData\\Local\\Programs\\NXAssistant\\mcp\\NxAssistant.Mcp.exe" } } }
    ```
 
-3. **验证**：对 Agent 说"在 NX 里建一个 40×25 的块"或看托盘四态——NX 连接一栏变绿即链路通。
-4. **规则管理**（托盘 → 设置 → "规则管理"分页）：表格列出规则包全部规则（编号/组/名称/级别），
-   勾选即启用/禁用，"改参数"编辑规则引用的标准系列数据（如孔系列、圆角系列），保存写入用户态
-   覆盖层并留变更日志（谁在何时禁了哪条），宿主下一次守卫/审图即生效；"重置"清空全部覆盖回到
-   基线。**禁用 ≠ 删除**：升级规则包后新规则默认启用；整包不可用仍 fail-closed。
-   需要整套阈值不同时（如按客户标准另立系列），复制 `docs/company_v3` 改 JSON 后把
-   `rules_dir`（或环境变量 `NXA_RULES_DIR`）指向该目录即可——引擎按 pack.json 装载，
-   全新判定逻辑则需随版本扩展。
+4. **验证**：对 Agent 说"在 NX 里建一个 40×25 的块"或看主页四态——NX 连接一栏变在线即链路通。
+
+### 人不装 Agent 怎么审图（审图工作台）
+
+托盘主页 →"审图工作台"分页，全流程点选完成，与 Agent 走**同一套**宿主工具/授权闸门/判定逻辑：
+
+1. 把待审 `.prt`（可含子目录）放进工作区根（默认 `%LOCALAPPDATA%\NXAssistant\workspace`，
+   FILE-001 沙箱：审图目录必须在其内）；
+2. "审图目录"填路径（或"浏览…"选择）→ **发起审图**，立刻拿到 run_id，后台逐张判定不卡界面；
+3. 进度每 2 秒自动刷新（状态/已完成张数/当前文件）；"取消"在当前这张完成后生效，
+   报告只含已完成部分；中断/失败后可选中该 run **续跑**（从下一张接着审）；
+4. 审完自动拉取 findings 明细进表格（图号/规则/级别/对象/实测/建议/占位标记），
+   **打开审图报告** 得到 `审图报告.xlsx`（`runs\<run_id>\` 内，与 Agent 发起的产物同格式）；
+5. 顶栏可切换查看历史 run（只读）；别的进程（如 Agent）正在跑的 run 请到发起方取消——
+   托盘替它查状态会被宿主判成 interrupted，反而毁掉它的实时进度。
+
+审图需要 NX 在跑且已加载插件（`extract_evidence` 在 NX 内逐张开件抽证据）；规则改动（下一页）
+对守卫与审图同时生效。
+
+### 规则管理（用户改规则）
+
+主页 →"规则管理"分页：表格列出规则包全部规则（编号/组/名称/级别），勾选即启用/禁用，
+"改参数"编辑规则引用的标准系列数据（如孔系列、圆角系列），保存写入用户态覆盖层并留变更日志
+（谁在何时禁了哪条），宿主下一次守卫/审图即生效；"重置"清空全部覆盖回到基线。
+**禁用 ≠ 删除**：升级规则包后新规则默认启用；整包不可用仍 fail-closed。
+需要整套阈值不同时（如按客户标准另立系列），复制 `docs/company_v3` 改 JSON 后把
+`rules_dir`（或环境变量 `NXA_RULES_DIR`）指向该目录即可——引擎按 pack.json 装载，
+全新判定逻辑则需随版本扩展。
 
 ## 验证与冒烟（不改真机状态的自检）
 
@@ -139,7 +165,7 @@ pwsh build/installer/uninstall.ps1     # 按 install.json 清单卸载；-Remove
 python build/smoke_stdio.py dist/mcp/NxAssistant.Mcp.exe   # tools/list 齐 33 工具 + schema/描述完整 + 写前守卫/覆盖层热加载（T4a/T4b，不需要 NX 在跑）
 python build/smoke_license.py <keygen.dll> <host.exe> <私钥> <公钥>   # 授权端到端（签发→锁机→篡改必拒）
 dotnet run --project tests/NxAssistant.Rules.Tests         # 规则引擎离线金样（φ13.2→FAIL+建议 13/14）+ 覆盖层九用例
-python build/smoke_tray.py                                 # 托盘 --status-json 形状 + rules_state 覆盖层探测（T4）
+python build/smoke_tray.py dist/tray/NxAssistant.exe       # --status-json 形状 + rules_state 探测（T4）+ 宿主 stdio 客户端闭环（T5 --review-probe）+ 主页构造（T6 --ui-probe）
 python build/smoke_installer.py                            # 脚本安装器装卸闭环（假 UGII 目录，不碰真机）
 python build/smoke_iss.py                                  # Inno 安装包静默装卸（假 UGII 目录 + 第三方 DLL 存活断言）
 ```
@@ -157,10 +183,10 @@ $env:NXA_LICENSE_PATH="..."; python build/smoke_live.py dist/mcp/NxAssistant.Mcp
 
 V1 交付面已全部落地并实机验证：33 工具白名单（第十片齐）、审图长任务（第九片）、
 托盘 + 共享配置层（第十一片）、脚本安装器 + Inno Setup 壳双路径（第十二片）、
-规则可见与可管理——用户态覆盖层 + 托盘规则管理分页（第十三片）——
+规则可见与可管理——用户态覆盖层 + 托盘规则管理分页（第十三片）、
+审图工作台——托盘左键主页 + 内置 MCP 客户端直连宿主（第十四片）——
 `smoke_live` A–K 全绿、安装包静默装卸端到端全绿。
 余下工作全部登记在 [`docs/progress-v1.md`](docs/progress-v1.md) 待办节：
-审图工作台（托盘直连宿主，人的发起入口）、
 客户 2D 样件与华恒数值表到位后把占位/负路径转正、代码签名（证书暂缓采购）、
 framework-dependent 发布改自包含或文档化运行时前置、安装向导人工观感验收。
 

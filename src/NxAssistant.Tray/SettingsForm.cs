@@ -30,12 +30,9 @@ internal sealed class SettingsForm : Form
         AddPathRow(conn, "宿主 exe：", _mcpExe, s.McpExe, "供“复制 MCP 配置片段”与状态探测使用");
         var lic = TabsPage("授权", LicenseText(s));
         AddPathRow(lic, "授权文件：", _license, s.LicensePath, "导入 Key 也会写到这个位置");
-        var rules = TabsPage("规则", "环境变量 NXA_RULES_DIR > settings.json[rules_dir] > 宿主同目录 company_v3\n\n");
+        var rules = TabsPage("规则", "环境变量 NXA_RULES_DIR > settings.json[rules_dir] > 宿主同目录 company_v3\n\n" +
+            "规则的启停/改参在主页“规则管理”分页（左键托盘图标）。\n");
         AddPathRow(rules, "规则包目录：", _rules, s.RulesDir, $"当前解析：{s.RulesDir}（pack.json {(s.RulesPackFound ? "已找到" : "未找到")}）");
-        // 第十三片：规则可见 + 可管理入口（覆盖层编辑，见 RulesTab）
-        var rulesMgmt = new TabPage("规则管理") { Padding = new Padding(6) };
-        rulesMgmt.Controls.Add(new RulesTab(s) { Dock = DockStyle.Fill });
-        tabs.TabPages.Add(rulesMgmt);
         var ws = TabsPage("工作区与报告", "环境变量 NXA_WORKSPACE > settings.json[workspace] > %LOCALAPPDATA%\\NXAssistant\\workspace\n\n");
         AddPathRow(ws, "工作区：", _workspace, s.WorkspaceRoot, $"审图 runs：{s.RunsRoot}");
         var log = TabsPage("日志",

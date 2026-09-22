@@ -75,4 +75,23 @@ finally:
     except OSError:
         pass
 
+# T5 第十四片：托盘→宿主 stdio MCP 客户端闭环（拉宿主、license_status、结构化错误回传）
+out3 = subprocess.run([exe, "--review-probe"], capture_output=True,
+                      text=True, encoding="utf-8", timeout=60)
+p = json.loads(out3.stdout or "{}")
+assert out3.returncode == 0 and p.get("ok") is True, \
+    f"review-probe 失败 rc={out3.returncode}: {out3.stdout[:300]}{out3.stderr[:300]}"
+assert isinstance(p.get("license_licensed"), bool) and p.get("license_state") == s["license_state"]
+assert p.get("review_status_error"), "review_status 应带回结构化错误文本"
+print("T5 stdio 客户端闭环 | state={} review_err={}".format(
+    p["license_state"], p["review_status_error"]))
+
+# T6 主页三分页（概览/审图工作台/规则管理）构造+关闭无异常（窗口闪现 1.2 秒属预期）
+out4 = subprocess.run([exe, "--ui-probe"], capture_output=True,
+                      text=True, encoding="utf-8", timeout=60)
+q = json.loads(out4.stdout or "{}")
+assert out4.returncode == 0 and q.get("ok") is True, \
+    f"ui-probe 失败 rc={out4.returncode}: {out4.stdout[:400]}{out4.stderr[:200]}"
+print("T6 主页构造 OK")
+
 print("SMOKE TRAY PASS")

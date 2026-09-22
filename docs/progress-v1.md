@@ -144,6 +144,14 @@ findings 表格（列对齐金样：图号/规则/级别/对象/实测/建议/�
 raw.githubusercontent 直连被墙则走 CDN）；[Languages] 只挂中文 = 全程中文、无选择对话框，
 Restart Manager 等系统文案随语言包变中文。`smoke_iss.py` 为行为级断言、不解析 iss 文本，无需改。
 
+**装机验收第五轮：修复"没进包"的构建时序坑（同日夜间）**：用户装 22:50 包后规则页依旧全哑——排查发现
+`make_installer.ps1` 只打包 `dist\` **现成品**，而 34bc207 提交时只改了源码、没重跑 `build.ps1`，
+此前所有"已含规则修复"的声明都不成立（装机 `tray\NxAssistant.dll` 仍是 21:1x 旧版）。
+重跑 build+make_installer 后 stdio 冒烟全绿，新包 5,433,608B / SHA1 73dc55305faf98dd2d4669747f701274d4e142c6。
+验证手段沉淀：托管代码在 `NxAssistant.dll`（`NxAssistant.exe` 只是 151KB 原生 apphost，哈希比对它无意义），
+用 UTF-16 特征串（如"操作提示：双击行看规则详情"）扫 DLL 即可离线确认真修复在包内。
+流程红线：**源码批次提交 → build.ps1 → make_installer.ps1 → 特征串验证 → 才可以说"包已含修复"**。
+
 待办（按 `tool-migration-v1.md` §5 分批）：
 - 主页/工作台人工验收：`--ui-probe` 只证构造无异常；左键开主页、审图全流程（真 NX + 金样目录）、
   规则管理交互手感需要在开发机人检一轮后再发客户（与安装向导观感同轮）。

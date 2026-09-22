@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 
 namespace NxAssistant.NxPlugin;
 
@@ -38,6 +39,29 @@ internal static class Workspace
             throw new UnauthorizedAccessException("路径逃逸出工作区根目录（FILE-001）");
         if (existsFail && File.Exists(full))
             throw new IOException("文件已存在: " + full);
+        return full;
+    }
+
+    /// <summary>镜像 _workspace_exchange_path：交换格式导出文件（如 .stp）解析到工作区；
+    /// 已存在且 overwrite=false 时报错。</summary>
+    public static string ResolveExchange(string fileName, string[] allowedExtensions, bool overwrite)
+    {
+        if (string.IsNullOrWhiteSpace(fileName))
+            throw new ArgumentException("file_name must be a non-empty string");
+        fileName = fileName.Trim();
+        if (Path.GetFileName(fileName) != fileName || fileName is "." or "..")
+            throw new ArgumentException("file_name must be a plain file name, not a path");
+        var ext = Path.GetExtension(fileName).ToLowerInvariant();
+        if (!allowedExtensions.Contains(ext))
+            throw new ArgumentException(
+                "file_name extension must be one of: " + string.Join(", ", allowedExtensions.OrderBy(x => x)));
+        var root = Root;
+        Directory.CreateDirectory(root);
+        var full = Path.GetFullPath(Path.Combine(root, fileName));
+        if (!full.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            throw new UnauthorizedAccessException("exchange path escapes workspace root (FILE-001)");
+        if (!overwrite && File.Exists(full))
+            throw new IOException("exchange file already exists: " + full);
         return full;
     }
 }

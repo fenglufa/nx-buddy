@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
@@ -306,6 +307,100 @@ internal static partial class ToolService
         ["min"] = box.Take(3).ToList(),
         ["max"] = box.Skip(3).Take(3).ToList(),
     };
+
+    // ---- export_exchange（§5 #18：DexManager STEP 导出，V1 仅 step——PRD §9.1 限定；
+    //      提交后回读文件存在+size>0，同属回读护栏家族；导出件必须先在盘上存在） ----
+
+    private static object ExportExchange(JsonElement p)
+    {
+        var work = Work();
+        var session = Session.GetSession();
+        var format = (OptString(p, "format") ?? "step").ToLowerInvariant();
+        if (format != "step")
+            throw new ArgumentException("V1 仅支持 format=step（Parasolid 导出待后续批次）");
+        var protocol = (OptString(p, "application_protocol") ?? "ap242").ToLowerInvariant();
+        var exportAs = protocol switch
+        {
+            "ap203" => NXOpen.StepCreator.ExportAsOption.Ap203,
+            "ap214" => NXOpen.StepCreator.ExportAsOption.Ap214,
+            "ap242" => NXOpen.StepCreator.ExportAsOption.Ap242,
+            "ap242ed2" => NXOpen.StepCreator.ExportAsOption.Ap242ED2,
+            _ => throw new ArgumentException(
+                "application_protocol must be ap203, ap214, ap242, or ap242ed2"),
+        };
+        bool includeCurves = true;
+        if (p.TryGetProperty("include_curves", out var ic))
+        {
+            if (ic.ValueKind != JsonValueKind.True && ic.ValueKind != JsonValueKind.False)
+                throw new ArgumentException("include_curves must be a boolean");
+            includeCurves = ic.GetBoolean();
+        }
+        var output = Workspace.ResolveExchange(
+            GetString(p, "file_name"), new[] { ".stp", ".step" },
+            p.TryGetProperty("overwrite", out var ow) && ow.ValueKind == JsonValueKind.True);
+        if (string.IsNullOrEmpty(work.FullPath) || !File.Exists(work.FullPath))
+            throw new InvalidOperationException("save the active NX part before STEP export");
+
+        NXOpen.StepCreator builder = null;
+        string? settingsFile = null;
+        try
+        {
+            builder = session.DexManager.CreateStepCreator();
+            builder.ExportAs = exportAs;
+            builder.ExportFrom = NXOpen.StepCreator.ExportFromOption.ExistingPart;
+            builder.InputFile = work.FullPath;
+            builder.ExportSolidsAndSurfacesAs =
+                NXOpen.StepCreator.ExportSolidsAndSurfacesAsOption.Precise;
+            builder.FileSaveFlag = false;
+            builder.LayerMask = "1-256";
+            builder.ColorAndLayers = true;
+            settingsFile = StepSettingsFile(protocol);
+            if (settingsFile != null) builder.SettingsFile = settingsFile;
+            builder.ObjectTypes.Solids = true;
+            builder.ObjectTypes.Surfaces = true;
+            builder.ObjectTypes.Curves = includeCurves;
+            builder.ExportDestination = NXOpen.BaseCreator.ExportDestinationOption.NativeFileSystem;
+            builder.OutputFile = output;
+            builder.ProcessHoldFlag = true;
+            builder.Commit();
+        }
+        finally
+        {
+            try { builder?.Destroy(); } catch { /* ignore */ }
+        }
+        if (!File.Exists(output))
+            throw new InvalidOperationException("NX export completed without creating: " + output);
+        long size = new FileInfo(output).Length;
+        if (size <= 0)
+            throw new InvalidOperationException("NX export created an empty file: " + output);
+        return new Dictionary<string, object?>
+        {
+            ["ok"] = true,
+            ["format"] = format,
+            ["application_protocol"] = protocol,
+            ["part"] = work.Leaf,
+            ["output_file"] = output,
+            ["file_size"] = size,
+            ["settings_file"] = settingsFile,
+            ["include_curves"] = includeCurves,
+            ["workspace"] = Workspace.Root,
+        };
+    }
+
+    /// <summary>镜像 _step_settings_file：UGII_BASE_DIR 下的官方 translator 定义文件，缺省 null。</summary>
+    private static string? StepSettingsFile(string protocol)
+    {
+        var baseDir = Environment.GetEnvironmentVariable("UGII_BASE_DIR");
+        if (string.IsNullOrWhiteSpace(baseDir)) return null;
+        var rel = protocol switch
+        {
+            "ap203" => Path.Combine("STEP203UG", "step203ug.def"),
+            "ap214" => Path.Combine("STEP214UG", "step214ug.def"),
+            _ => Path.Combine("TRANSLATORS", "step242", "step242ug.def"),
+        };
+        var path = Path.Combine(baseDir, rel);
+        return File.Exists(path) ? path : null;
+    }
 
     /// <summary>镜像 _items_by_indices：非空 int 数组、越界与重复都报错，按 body.GetEdges() 顺序取边。</summary>
     private static NXOpen.Edge[] EdgesByIndices(Body body, JsonElement p)

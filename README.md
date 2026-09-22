@@ -49,9 +49,10 @@ stdio 冒烟通过（`tools/list` 暴露 `ping`、`license_status`）。
 **写前守卫批次（第四片）**：`create_cylindrical_hole`（插件 `CreateCylinderBuilder` AxisDiameterAndHeight+Subtract，失败 UndoToMark 回滚；对齐旧桥语义）+ 宿主 `HostRules` 写前规则守卫：候选孔证据→`RuleEngine.Blocking`，失配系列直径（如 φ13.2）在 **转发给 NX 之前** 即返回 `RULE_BLOCKED`+邻近建议；规则包缺失时 fail-closed（`RULE_PACK_UNAVAILABLE`）。**实机全绿**（smoke_live 阶段 E：φ10 正常成孔、φ13.2 被拦且 feature_count 前后不变、save 落盘）。
 **边特征批次（第五片）**：`fillet_edges`（`EdgeBlendBuilder`+`CreateRuleEdgeDumb`+`AddChainset(collector,radius)`；`edge_indices` 与 `inspect_body_topology` 边 index 同源，非空/去重/越界必错）与 `chamfer_edges`（`ChamferBuilder` EdgesAlongFaces+SymmetricOffsets 双偏置）；FEAT-FILLET-002 为 **warn 级守卫**：系列外半径（如 2.7）不拦截成孔，成功响应附带 `rule_warnings`+邻近建议。**实机全绿**（smoke_live 阶段 F：r=3 无告警、r=2.7 带 warn 建议 [2,3]、chamfer d=2+rebuild 0 错）。
 **位移回读护栏批次（第六片）**：`move_object`（`CreateMoveBodyBuilder`+`CreateRuleBodyDumb`+`ModlMotion.DeltaXyz` 表达式 RHS 赋值，`Validate()` 前置校验）——提交后按 UF 包围盒回读实际位移，与请求分量差 >1e-3 即 `UndoToMark` 回滚并报"特征驱动实体请改特征参数"，把 Move Body 的**静默假成功**消灭在护栏内；这是 §1.2/§1.4 回读护栏的模板实现，后续写 op 对齐。**实机全绿**（smoke_live 阶段 G：零向量宿主直拒；block 与 extrude 两类特征驱动实体均实测"提交成功但没动"→ 护栏回滚、包围盒分毫不差、rebuild 0 错；非特征实体真移动正路径待 `import_exchange` 批次补测）。
+**交换导出批次（第七片）**：`export_exchange`（`DexManager.CreateStepCreator`：ap203/ap214/ap242/ap242ED2、ExistingPart+精确实体、官方 translator `.def` 设置文件按 `UGII_BASE_DIR` 探测；PRD §9.1 限定 V1 仅 STEP，`format=parasolid` 明确拒绝）+ `Workspace.ResolveExchange` 把 FILE-001 沙箱扩展到 `.stp/.step`（`../` 逃逸/带路径文件名直拒，重名需 `overwrite=true`）；导出后回读文件存在且 size>0。**实机全绿**（smoke_live 阶段 H：逃逸与 parasolid 被拒、8132 字节 STEP 落盘且文件头含 ISO-10303、重复导出被拒后 overwrite 重导成功）。
 
 待办（按 `tool-migration-v1.md` §5 分批）：
-- 读/写工具批次（续）：`export_exchange`（工作区 STEP）、`import_exchange`（顺带补 move_object 正路径）、`shell_body`/`mirror_feature` 等按需排期。
+- 读/写工具批次（续）：`import_exchange`（顺带补 move_object 正路径）、`shell_body`/`mirror_feature` 等按需排期。
 - 审图长任务：`review_folder`/`review_status`/`review_findings`（run_id 状态机 + xlsx 报告，xlsx 用 ClosedXML）；把规则引擎接上 NX 证据抽取，用 `test/drawings` 验收。
 - 工程图类样件（图框/标题栏/图层）：待客户确认真实图框 id 后补 2D 图纸样件。
 

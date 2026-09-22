@@ -362,6 +362,31 @@ public sealed class NxTools
         }, ct);
     }
 
+    [McpServerTool(Name = "export_exchange")]
+    [Description("把当前工作部件导出为工作区内的 STEP 文件（DexManager StepCreator，ap203/ap214/ap242/ap242ed2，精确实体+曲面+可选曲线）。file_name 必须是纯文件名且扩展名 .stp/.step，落在 FILE-001 沙箱内；已存在需 overwrite=true；当前部件必须已保存到盘上。导出后回读文件存在且 size>0，0 字节/未生成即报错。V1 仅支持 STEP（Parasolid 待后续）。需有效授权。")]
+    public Task<JsonElement> ExportExchange(
+        string file_name,
+        string format = "step",
+        string application_protocol = "ap242",
+        bool include_curves = true,
+        bool overwrite = false,
+        CancellationToken ct = default)
+    {
+        return Guard(() =>
+        {
+            _license.EnsureValid("export_exchange");
+            var p = new Dictionary<string, object?>
+            {
+                ["file_name"] = file_name,
+                ["format"] = format,
+                ["application_protocol"] = application_protocol,
+                ["include_curves"] = include_curves,
+                ["overwrite"] = overwrite,
+            };
+            return _plugin.CallAsync(MethodNames.ExportExchange, p, ct);
+        }, ct);
+    }
+
     /// warn 级规则告警随成功响应附带返回（不改变 ok 语义，不拦截写入）。
     private static JsonElement AttachRuleWarnings(JsonElement result, IReadOnlyList<NxAssistant.Rules.Finding> warnings)
     {

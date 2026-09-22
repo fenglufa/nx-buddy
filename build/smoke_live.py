@@ -334,6 +334,33 @@ def main():
         rb2 = payload(h2.call("rebuild_work_part"))
         assert rb2.get("ok") is True and rb2.get("update_error_count") == 0, rb2
         print("G2 extrude 实体移动被回滚 ->", mv2["error"][:110], "... | rebuild 0 错")
+
+    # ---- 阶段 H：export_exchange STEP 导出（FILE-001 工作区沙箱 + 文件回读护栏） ----
+    step_name = f"NXA_LIVE_step_{sfx}.stp"
+    hp = payload(h2.call("create_part", {"file_name": f"NXA_LIVE_step_{sfx}", "units": "millimeters"}))
+    assert hp.get("ok"), hp
+    hb = payload(h2.call("create_block", {"length": 40, "width": 25, "height": 15}))
+    assert hb.get("ok"), hb
+    hs = payload(h2.call("save_work_part"))
+    assert hs.get("file_exists"), hs
+
+    bad = payload(h2.call("export_exchange", {"file_name": "../escape.stp"}))
+    assert bad.get("ok") is not True and "plain file name" in json.dumps(bad), bad
+    fmt = payload(h2.call("export_exchange", {"file_name": step_name, "format": "parasolid"}))
+    assert fmt.get("ok") is not True and "step" in json.dumps(fmt), fmt
+    hx = payload(h2.call("export_exchange", {"file_name": step_name}))
+    assert hx.get("ok") and hx["file_size"] > 1000, hx
+    with open(hx["output_file"], "rb") as f:
+        head = f.read(128)
+    assert b"ISO-10303" in head, head[:64]
+    print("H0 ../逃逸 与 format=parasolid 均被拒 ->", bad["error"][:52], "|", fmt["error"][:30])
+    print("H1 STEP(ap242) 导出 ->", hx["output_file"], hx["file_size"], "bytes, 文件头含 ISO-10303")
+
+    dup = payload(h2.call("export_exchange", {"file_name": step_name}))
+    assert dup.get("ok") is not True and "already exists" in json.dumps(dup), dup
+    ow = payload(h2.call("export_exchange", {"file_name": step_name, "overwrite": True}))
+    assert ow.get("ok"), ow
+    print("H2 重复导出被拒 / overwrite=true 重导 ok ->", ow["file_size"], "bytes")
     h2.close()
     print(f"SMOKE LIVE PASS (pid={pid}, part={c2.get('full_path')})")
     return 0

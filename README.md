@@ -87,7 +87,10 @@ pwsh build/deploy_plugin.ps1             # dist\nx_plugin → %UGII_USER_DIR%\st
 运行 `NXAssistant-Setup-<版本>.exe`：向导只问两件事——装到哪（默认 `%LOCALAPPDATA%\Programs\NXAssistant`）
 和要不要桌面快捷方式（默认勾选；之后开机自启/双击桌面图标都直接打开主页）。
 升级安装会先自动关闭正在跑的本产品进程（托盘 + MCP 宿主——Qoder/Claude 等 MCP 客户端会常驻拉起
-`NxAssistant.Mcp.exe`，强杀无数据损失，装完由托盘/客户端重拉），不再弹"文件正在使用"对话框。
+`NxAssistant.Mcp.exe`，强杀无数据损失，装完由托盘/客户端重拉），不再弹"文件正在使用"对话框；
+所有程序文件**无条件覆盖**（[Files] 全局 `ignoreversion`——.NET 产物自带 1.0.0.0 文件版本，
+Inno 默认对"同版本"已存在文件直接跳过，实测导致升级静默无效、只有卸载重装才更新）。
+正常升级路径就是"直接双击新包"，无需先卸载。
 NX 插件部署**不再让用户选**：安装尾声自动把 `{app}\nx_plugin` 合并复制进 `%UGII_USER_DIR%\startup`
 （只复制、不删他人文件）。检测不到 `UGII_USER_DIR`（NX 用户定制目录，由站点环境配置定义，与 NX
 装在哪个盘无关）或部署脚本失败，会弹错误提示说清原因并给出手动补部署命令；成功也会弹一句

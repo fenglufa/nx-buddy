@@ -42,13 +42,16 @@ WizardStyle=modern
 Name: "chinesesimplified"; MessagesFile: "Languages\ChineseSimplified.isl"
 
 [Files]
-Source: "..\..\dist\mcp\*"; DestDir: "{app}\mcp"; Flags: recursesubdirs createallsubdirs; Excludes: "company_v3\*"
-Source: "..\..\docs\company_v3\*"; DestDir: "{app}\mcp\company_v3"; Flags: recursesubdirs createallsubdirs
-Source: "..\..\dist\tray\*"; DestDir: "{app}\tray"; Flags: recursesubdirs createallsubdirs
-Source: "..\..\dist\nx_plugin\*"; DestDir: "{app}\nx_plugin"; Flags: recursesubdirs createallsubdirs
-Source: "install.ps1"; DestDir: "{app}\installer"
-Source: "uninstall.ps1"; DestDir: "{app}\installer"
-Source: "..\deploy_plugin.ps1"; DestDir: "{app}\installer"
+; ignoreversion 必需：.NET 产物都带 1.0.0.0 文件版本，Inno 默认对"同版本号"的已存在文件
+; 直接跳过不覆盖——实测升级安装一个 DLL 都没换（日志 Same version. Skipping.），
+; 只有卸载重装才更新。升级必须无条件覆盖自家产物。
+Source: "..\..\dist\mcp\*"; DestDir: "{app}\mcp"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "company_v3\*"
+Source: "..\..\docs\company_v3\*"; DestDir: "{app}\mcp\company_v3"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\..\dist\tray\*"; DestDir: "{app}\tray"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\..\dist\nx_plugin\*"; DestDir: "{app}\nx_plugin"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "install.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion
+Source: "uninstall.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion
+Source: "..\deploy_plugin.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion
 
 [Registry]
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; \

@@ -103,7 +103,7 @@ internal sealed class MainWindow : Form
             $"规则包：{s.RulesDir}（pack.json {(s.RulesPackFound ? "已找到" : "未找到——宿主 fail-closed")}）\n" +
             $"用户覆盖层：{s.RulesStatePath}　禁用 {s.RulesDisabledCount} 条　改参 {s.RulesOverridesCount} 处\n" +
             (string.IsNullOrEmpty(s.RulesStateLatest) ? "" : $"最近一次规则改动：{s.RulesStateLatest}\n") +
-            "\n工作区（审图目录须在其内）：" + s.WorkspaceRoot +
+            "\n审图工作区（选择外部图纸目录时会自动复制副本再审，原件不动）：" + s.WorkspaceRoot +
             "　共享配置：" + s.SettingsPath;
     }
 

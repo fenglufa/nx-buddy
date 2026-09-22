@@ -20,6 +20,7 @@ internal sealed class ReviewTab : UserControl
 {
     private readonly McpHostClient _client;
     private readonly string _runsRoot;
+    private readonly string _workspaceRoot;
     private readonly TextBox _dirBox;
     private readonly ComboBox _runsCombo;
     private readonly Label _progress;
@@ -34,13 +35,14 @@ internal sealed class ReviewTab : UserControl
     {
         _client = client;
         _runsRoot = s.RunsRoot;
+        _workspaceRoot = s.WorkspaceRoot;
         Dock = DockStyle.Fill;
 
         var top = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 34, Padding = new Padding(6, 4, 6, 0) };
-        top.Controls.Add(new Label { Text = "审图目录（须在 workspace 根内）：", AutoSize = true, Margin = new Padding(3, 7, 0, 0) });
+        top.Controls.Add(new Label { Text = "图纸目录：", AutoSize = true, Margin = new Padding(3, 7, 0, 0) });
         _dirBox = new TextBox { Width = 430, Text = s.WorkspaceRoot, Margin = new Padding(3, 5, 0, 0) };
         top.Controls.Add(_dirBox);
-        var browse = new Button { Text = "浏览…", AutoSize = true };
+        var browse = new Button { Text = "选择图纸目录…", AutoSize = true };
         browse.Click += (_, _) => Browse();
         top.Controls.Add(browse);
 
@@ -64,7 +66,8 @@ internal sealed class ReviewTab : UserControl
             Dock = DockStyle.Top,
             Height = 40,
             Padding = new Padding(8, 6, 8, 0),
-            Text = "就绪。把 *.prt 放进审图目录（可含子目录）→“发起审图”；进度每 2 秒自动刷新，与 Agent 同一套判定。",
+            Text = "就绪。“选择图纸目录”可选任意位置的文件夹；不在工作区内的会自动复制一份进来再审（原件只读不动），" +
+                   "然后点“发起审图”；进度每 2 秒自动刷新，与 Agent 同一套判定。",
         };
 
         _runsCombo = new ComboBox
@@ -121,11 +124,47 @@ internal sealed class ReviewTab : UserControl
     {
         using var dlg = new FolderBrowserDialog
         {
-            Description = "选择审图目录（FILE-001：必须位于工作区根内）",
+            Description = "选择图纸目录（任意位置均可，可含子目录）",
             UseDescriptionForTitle = true,
             SelectedPath = Directory.Exists(_dirBox.Text.Trim()) ? _dirBox.Text.Trim() : "",
         };
         if (dlg.ShowDialog(FindForm()) == DialogResult.OK) _dirBox.Text = dlg.SelectedPath;
+    }
+
+    /// <summary>
+    /// FILE-001 沙箱在宿主侧不可绕（Agent 共用同一 review_folder）；对"人"的体验由托盘兜底：
+    /// 选了工作区外的目录就递归把 *.prt 复制进 workspace\审图导入\<时间戳>\（保留子目录结构），
+    /// 审的是副本、原件零接触；workspace 内则直接用原路径不复制。
+    /// </summary>
+    private string? ImportToWorkspace(string dir)
+    {
+        var full = Path.GetFullPath(dir);
+        var root = Path.GetFullPath(_workspaceRoot);
+        if (full.Equals(root, StringComparison.OrdinalIgnoreCase) ||
+            full.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            return full;
+
+        try
+        {
+            var files = Directory.GetFiles(full, "*.prt", SearchOption.AllDirectories);
+            if (files.Length == 0) { Say($"发起失败：{full} 及其子目录里没有 *.prt 文件。"); return null; }
+            var dest = Path.Combine(root, "审图导入",
+                DateTime.Now.ToString("yyyyMMdd_HHmmss"));
+            foreach (var src in files)
+            {
+                var rel = Path.GetRelativePath(full, src);
+                var dst = Path.Combine(dest, rel);
+                Directory.CreateDirectory(Path.GetDirectoryName(dst)!);
+                File.Copy(src, dst);
+            }
+            Say($"已复制 {files.Length} 个 .prt 到工作区副本 {dest}（原件未动），审图对副本进行。");
+            return dest;
+        }
+        catch (Exception ex)
+        {
+            Say($"复制进工作区失败：{ex.Message}");
+            return null;
+        }
     }
 
     private void ReloadRuns()
@@ -166,6 +205,20 @@ internal sealed class ReviewTab : UserControl
         return at >= 0 && at < _runIds.Count ? _runIds[at] : null;
     }
 
+    /// <summary>run.json 登记的审图目录（宿主续跑时用它做一致性校验）。</summary>
+    private string? RunRecordedPath(string runId)
+    {
+        try
+        {
+            var file = Path.Combine(_runsRoot, runId, "run.json");
+            if (!File.Exists(file)) return null;
+            using var doc = JsonDocument.Parse(File.ReadAllText(file));
+            var p = Str(doc.RootElement, "path");
+            return p.Length == 0 ? null : p;
+        }
+        catch (Exception) { return null; }
+    }
+
     private static string Str(JsonElement e, string key) =>
         e.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() ?? "" : "";
 
@@ -178,7 +231,27 @@ internal sealed class ReviewTab : UserControl
     {
         if (_busy) return;
         var dir = _dirBox.Text.Trim();
-        if (dir.Length == 0) { Say("请先填写审图目录。"); return; }
+        if (dir.Length == 0) { Say("请先选择图纸目录。"); return; }
+
+        string reviewPath;
+        if (resume == null)
+        {
+            var imported = ImportToWorkspace(dir);
+            if (imported == null) return;
+            reviewPath = imported;
+        }
+        else
+        {
+            // 宿主校验 resume 的 path 必须与 run 记录一致——直接用登记路径（可能是导入副本），
+            // 不受输入框当前内容干扰。
+            reviewPath = RunRecordedPath(resume) ?? "";
+            if (reviewPath.Length == 0 || !Directory.Exists(reviewPath))
+            {
+                Say($"续跑失败：run {resume} 记录的审图目录已不存在（副本被清理？）。" +
+                    "请把图纸重新复制到工作区后作为新审图发起。");
+                return;
+            }
+        }
 
         // 跨宿主防呆：Agent 的宿主有 running run 时，两边同时发起会抢同一个 NX 插件队列
         if (resume == null && _ownRunId == null && StatusProbe.Read().ReviewBusy)
@@ -191,7 +264,7 @@ internal sealed class ReviewTab : UserControl
         _busy = true;
         try
         {
-            var args = new Dictionary<string, object?> { ["path"] = dir };
+            var args = new Dictionary<string, object?> { ["path"] = reviewPath };
             if (resume != null) args["resume_run_id"] = resume;
             var p = await _client.CallToolAsync("review_folder", args);
             if (!IsOk(p)) { Say("发起失败：" + Err(p)); ReloadRuns(); return; }

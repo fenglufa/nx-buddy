@@ -82,6 +82,13 @@ public sealed class RulePack
         return loaded;
     }
 
+    /// <summary>可选数据文件（如 title_block_fields 别名表）：缺失返回 false，不抛。</summary>
+    public bool TryData(RuleDef rule, string fileName, out JsonElement data)
+    {
+        try { data = Data(rule, fileName); return true; }
+        catch (System.IO.FileNotFoundException) { data = default; return false; }
+    }
+
     private static JsonElement ReadJsonFile(string path)
     {
         using var doc = JsonDocument.Parse(System.IO.File.ReadAllText(path));

@@ -1,0 +1,14 @@
+{
+  "standard": "company_v3",
+  "placeholder": true,
+  "note": "标题栏规范字段→图纸页属性标题的别名映射。占位取行业惯用名（含中英），华恒真实图样的属性标题确认后替换（迁移文档 §5 待确认项）。",
+  "field_titles": {
+    "drawing_no": ["图样代号", "图号", "产品代号", "零件号", "Drawing No", "Drawing Number", "PART NO", "Item"],
+    "revision": ["版本", "图样版本", "修订", "版本号", "Rev", "Revision", "Version"],
+    "title": ["图样名称", "名称", "产品名称", "Title", "Description", "NAME"],
+    "material": ["材料", "材质", "Material"],
+    "scale": ["比例", "Scale"],
+    "drawn_by": ["制图", "设计", "标合", "Drawn", "Designer", "Drawn By"],
+    "date": ["日期", "制图日期", "Design Date", "Date"]
+  }
+}

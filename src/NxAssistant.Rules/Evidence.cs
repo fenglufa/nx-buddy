@@ -85,7 +85,8 @@ public sealed class SheetEvidence
     public string FrameId { get; set; } = "";
     public string TemplateName { get; set; } = "";
     public int? ViewCount { get; set; }
-    /// <summary>标题栏字段名→值（缺失/空即视为未填）。</summary>
+    /// <summary>图纸页字符串属性全集（标题栏字段名→值）。TITLE 规则经 title_block_fields.json
+    /// 别名表解析规范字段；缺失/空即视为未填。</summary>
     public Dictionary<string, string> TitleBlock { get; set; } = new();
     public List<string> LayersUsed { get; set; } = new();
     public List<DimensionEvidence> Dimensions { get; set; } = new();

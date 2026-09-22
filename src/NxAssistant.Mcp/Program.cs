@@ -412,6 +412,57 @@ public sealed class NxTools
         }, ct);
     }
 
+    // ---- 批 5：抽取类 inspect_*（只读，无授权闸门）+ undo_last_assistant_change（写侧，有闸门） ----
+
+    [McpServerTool(Name = "inspect_layers")]
+    [Description("读工作部件对象所在图层分布：每个体的 index/名称/类型（solid/sheet/other）与图层号、layer_counts 汇总、当前工作图层。LAYER-001/002 证据源之一；图层号→图层名的别名映射待客户图样校准（V1 以数字对外）。")]
+    public Task<JsonElement> InspectLayers(CancellationToken ct) =>
+        Guard(() => _plugin.CallAsync(MethodNames.InspectLayers, null, ct), ct);
+
+    [McpServerTool(Name = "inspect_drawing_annotations")]
+    [Description("读工作部件的注释与尺寸清单（名称/journal id/所在图层/文本或测量值）。工程图注释正路径待客户 2D 样件；模型件返回空清单+0 计数是正常结果。DIM-001/LAYER-002 证据源。")]
+    public Task<JsonElement> InspectDrawingAnnotations(CancellationToken ct) =>
+        Guard(() => _plugin.CallAsync(MethodNames.InspectDrawingAnnotations, null, ct), ct);
+
+    [McpServerTool(Name = "inspect_title_block")]
+    [Description("读图纸标题栏字段：逐页返回 title_block_raw（图纸页字符串属性全集）与比例。规范字段名（drawing_no/revision/title/material/scale/drawn_by/date）由规则包 title_block_fields.json 别名表解析（占位，待客户确认）。无图纸页时 drawing_sheet_count=0 属正常（V1 不创建工程图）。")]
+    public Task<JsonElement> InspectTitleBlock(CancellationToken ct) =>
+        Guard(() => _plugin.CallAsync(MethodNames.InspectTitleBlock, null, ct), ct);
+
+    [McpServerTool(Name = "inspect_drawing_sheet")]
+    [Description("读图纸页/图框/视图清单：每页名称、幅面尺寸、单位、投影角、比例、视图数与 frame_id/template_name（按候选属性标题探测，真实图框 id 待客户确认）。喂 FRAME-001/VIEW-001。")]
+    public Task<JsonElement> InspectDrawingSheet(CancellationToken ct) =>
+        Guard(() => _plugin.CallAsync(MethodNames.InspectDrawingSheet, null, ct), ct);
+
+    [McpServerTool(Name = "inspect_weld_annotations")]
+    [Description("判断工作部件有无焊缝符号（Annotations.Welds 计数）。华恒 WELD-ANN-001 只查有无（warn 级）。")]
+    public Task<JsonElement> InspectWeldAnnotations(CancellationToken ct) =>
+        Guard(() => _plugin.CallAsync(MethodNames.InspectWeldAnnotations, null, ct), ct);
+
+    [McpServerTool(Name = "inspect_parts_list")]
+    [Description("读明细表/BOM 存在性与名称。V1 只报清单（行文本抽取待客户装配样件）；BOM-BUY-001 缺证据即跳过。")]
+    public Task<JsonElement> InspectPartsList(CancellationToken ct) =>
+        Guard(() => _plugin.CallAsync(MethodNames.InspectPartsList, null, ct), ct);
+
+    [McpServerTool(Name = "inspect_sheet_thickness")]
+    [Description("读板厚：V1 无钣金工具，按实体最小包围盒棱长启发（method=solid_bbox_min_dim，多实体取最小），逐体给出三棱长。PLATE-THK-001 白名单比对用；非平板零件该值不代表工艺厚度，判定请结合零件类型解读。")]
+    public Task<JsonElement> InspectSheetThickness(CancellationToken ct) =>
+        Guard(() => _plugin.CallAsync(MethodNames.InspectSheetThickness, null, ct), ct);
+
+    [McpServerTool(Name = "inspect_hole_pattern")]
+    [Description("读法兰/孔组分布：同直径同轴向 ≥3 孔且径向散布 <15% 视为圆形孔组，返回 pcd/孔数/孔径/特征名。FLANGE-PCD-001 样本比对用；V1 不创建阵列特征，正路径待客户法兰样件。")]
+    public Task<JsonElement> InspectHolePattern(CancellationToken ct) =>
+        Guard(() => _plugin.CallAsync(MethodNames.InspectHolePattern, null, ct), ct);
+
+    [McpServerTool(Name = "undo_last_assistant_change")]
+    [Description("只撤销小助手在当前工作部件的上一次成功写入：依赖每个写 op 提交的具名可见 undo mark+模型指纹双校验——撤销栈最新可见标记不是助手所写、或模型自上次写入后又发生变化（可能有用户手工操作）时一律拒绝并提示在 NX 中手动回退，绝不误撤用户操作。账本在插件进程内，NX 重启/部件重开后不保留。仅回退会话，磁盘文件需再 save_work_part 才同步。需有效授权。")]
+    public Task<JsonElement> UndoLastAssistantChange(CancellationToken ct) =>
+        Guard(() =>
+        {
+            _license.EnsureValid("undo_last_assistant_change");
+            return _plugin.CallAsync(MethodNames.UndoLastAssistantChange, null, ct);
+        }, ct);
+
     [McpServerTool(Name = "review_folder")]
     [Description("审图长任务：提交工作区内的目录（FILE-001 沙箱，path 可为绝对路径或工作区相对路径），立即返回 run_id——不同步堵死对话。宿主内部串行逐张打开 *.prt、抽证据、对 company_v3 规则包判定，结束后生成 审图报告.xlsx+summary.json。Agent 协议：拿到 run_id 后告知用户总数，随后用 review_status 轮询；不要对目录里每个文件单独 inspect_*；不要按时间猜测完成。中断/失败后可用 resume_run_id 从下一张续跑。需有效授权。")]
     public Task<JsonElement> ReviewFolder(

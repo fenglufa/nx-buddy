@@ -75,6 +75,23 @@ Check("LAYER-001 禁用层阻断", layerF.Any(f => f.RuleId == "LAYER-001" && f.
 Check("LAYER-001 未知层仅警告", layerF.Any(f => f.RuleId == "LAYER-001" && f.Value == "神秘层" && f.Enforcement == "warn"));
 Check("LAYER-002 尺寸错层报", layerF.Any(f => f.RuleId == "LAYER-002" && f.Value == "OUTLINE"));
 
+// ---- 批 5：标题栏别名表（title_block_fields 占位）+ 数字图层占位守卫 ----
+var sheetAlias = new SheetEvidence { FrameId = "FRAME_A3_V3", ViewCount = 1 };
+sheetAlias.TitleBlock["图样代号"] = "PX-001"; // 别名→drawing_no：解析成功才会进 TITLE-002 格式判定
+sheetAlias.TitleBlock["材料"] = "40Cr";       // 别名→material：白名单外材料，解析成功才会报
+var aliasF = RuleEngine.Evaluate(pack, new Evidence { Drawing = new DrawingEvidence { Sheets = { sheetAlias } } });
+Check("别名表解析 drawing_no（格式报）", aliasF.Any(f => f.RuleId == "TITLE-002"));
+Check("别名表解析 material（白名单报）", aliasF.Any(f => f.RuleId == "TITLE-004" && f.Value == "40Cr"));
+Check("别名字段已填则不再算缺失",
+    !aliasF.Any(f => f.RuleId == "TITLE-001" && f.Message.Contains("drawing_no")));
+
+var sheetNum = new SheetEvidence { FrameId = "FRAME_A3_V3", ViewCount = 1 };
+sheetNum.LayersUsed.Add("3");
+sheetNum.Dimensions.Add(new DimensionEvidence { Layer = "3" });
+var numF = RuleEngine.Evaluate(pack, new Evidence { Drawing = new DrawingEvidence { Sheets = { sheetNum } } });
+Check("数字图层不误伤 LAYER-002", !numF.Any(f => f.RuleId == "LAYER-002"));
+Check("数字图层 LAYER-001 只警告", numF.Any(f => f.RuleId == "LAYER-001" && f.Enforcement == "warn"));
+
 // ---- 实体 / 视图 ----
 var evB = new Evidence
 {

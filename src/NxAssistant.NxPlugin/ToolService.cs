@@ -44,6 +44,15 @@ internal static partial class ToolService
             case MethodNames.ExportExchange: return ExportExchange(p);
             case MethodNames.ImportExchange: return ImportExchange(p);
             case MethodNames.ExtractEvidence: return ExtractEvidence(p);
+            case MethodNames.InspectLayers: return InspectLayers(p);
+            case MethodNames.InspectDrawingAnnotations: return InspectDrawingAnnotations(p);
+            case MethodNames.InspectTitleBlock: return InspectTitleBlock(p);
+            case MethodNames.InspectDrawingSheet: return InspectDrawingSheet(p);
+            case MethodNames.InspectWeldAnnotations: return InspectWeldAnnotations(p);
+            case MethodNames.InspectPartsList: return InspectPartsList(p);
+            case MethodNames.InspectSheetThickness: return InspectSheetThickness(p);
+            case MethodNames.InspectHolePattern: return InspectHolePattern(p);
+            case MethodNames.UndoLastAssistantChange: return UndoLastAssistantChange(p);
             default:
                 throw new NotSupportedException($"unknown method: '{method}' (not implemented yet)");
         }

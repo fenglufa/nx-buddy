@@ -134,8 +134,17 @@ internal static class ReviewOrchestrator
                     NxAssistant.Core.Protocol.MethodNames.ExtractEvidence,
                     new Dictionary<string, object?> { ["file_path"] = file }).ConfigureAwait(false);
                 var ev = ParseEvidence(result);
+                string drawingNo = Path.GetFileNameWithoutExtension(file), revision = "";
+                if (ev.Drawing != null && ev.Drawing.Sheets.Count > 0)
+                {
+                    // 有工程图证据后报告行改读真实图号/版本（title_block_fields 别名表）
+                    var s0 = ev.Drawing.Sheets[0];
+                    var dn = RuleEngine.TitleField(pack, s0, "drawing_no");
+                    if (!string.IsNullOrEmpty(dn)) drawingNo = dn;
+                    revision = RuleEngine.TitleField(pack, s0, "revision");
+                }
                 foreach (var f in RuleEngine.Evaluate(pack, ev))
-                    AppendFinding(findingsPath, run, file, f);
+                    AppendFinding(findingsPath, run, file, f, drawingNo, revision);
             }
             catch (NxNotConnectedException ex)
             {
@@ -346,17 +355,68 @@ internal static class ReviewOrchestrator
             foreach (var fl in fillets.EnumerateArray())
                 if (fl.TryGetProperty("radius", out var r) && r.ValueKind == JsonValueKind.Number)
                     part.Fillets.Add(new FilletEvidence { Radius = r.GetDouble() });
-        return new Evidence { Part = part };
+        if (pj.TryGetProperty("plate_thickness", out var pt) && pt.ValueKind == JsonValueKind.Number)
+            part.PlateThickness = pt.GetDouble();
+        if (pj.TryGetProperty("hole_patterns", out var patterns))
+            foreach (var hp in patterns.EnumerateArray())
+                part.HolePatterns.Add(new HolePatternEvidence
+                {
+                    Name = hp.TryGetProperty("name", out var hn) ? hn.GetString() ?? "" : "",
+                    Pcd = hp.TryGetProperty("pcd", out var pcd) && pcd.ValueKind == JsonValueKind.Number
+                        ? pcd.GetDouble() : null,
+                    HoleCount = hp.TryGetProperty("hole_count", out var hc) && hc.ValueKind == JsonValueKind.Number
+                        ? hc.GetInt32() : null,
+                    HoleDiameter = hp.TryGetProperty("hole_diameter", out var hd) &&
+                                   hd.ValueKind == JsonValueKind.Number ? hd.GetDouble() : null,
+                });
+
+        DrawingEvidence? drawing = null;
+        if (ev.TryGetProperty("drawing", out var dj) && dj.ValueKind == JsonValueKind.Object)
+        {
+            drawing = new DrawingEvidence();
+            if (dj.TryGetProperty("has_weld_symbol", out var ws) && ws.ValueKind == JsonValueKind.True)
+                drawing.HasWeldSymbol = true;
+            if (dj.TryGetProperty("sheets", out var dss))
+                foreach (var s in dss.EnumerateArray())
+                {
+                    var se = new SheetEvidence
+                    {
+                        FrameId = s.TryGetProperty("frame_id", out var fid) ? fid.GetString() ?? "" : "",
+                        TemplateName = s.TryGetProperty("template_name", out var tn)
+                            ? tn.GetString() ?? "" : "",
+                        ViewCount = s.TryGetProperty("view_count", out var vc) &&
+                                    vc.ValueKind == JsonValueKind.Number ? vc.GetInt32() : null,
+                    };
+                    if (s.TryGetProperty("title_block_raw", out var tbr) &&
+                        tbr.ValueKind == JsonValueKind.Object)
+                        foreach (var kv in tbr.EnumerateObject())
+                            se.TitleBlock[kv.Name] = kv.Value.GetString() ?? "";
+                    if (s.TryGetProperty("layers_used", out var lus))
+                        foreach (var lu in lus.EnumerateArray())
+                            if (lu.ValueKind == JsonValueKind.String)
+                                se.LayersUsed.Add(lu.GetString()!);
+                    if (s.TryGetProperty("dimensions", out var ds))
+                        foreach (var d in ds.EnumerateArray())
+                            se.Dimensions.Add(new DimensionEvidence
+                            {
+                                Layer = d.TryGetProperty("layer", out var dl)
+                                    ? dl.GetString() ?? "" : "",
+                            });
+                    drawing.Sheets.Add(se);
+                }
+        }
+        return new Evidence { Part = part, Drawing = drawing };
     }
 
-    private static void AppendFinding(string findingsPath, RunState run, string file, Finding f)
+    private static void AppendFinding(string findingsPath, RunState run, string file, Finding f,
+        string drawingNo, string revision)
     {
         var row = new Dictionary<string, object?>
         {
             ["run_id"] = run.RunId,
             ["file"] = file,
-            ["drawing_no"] = Path.GetFileNameWithoutExtension(file), // 标题栏批次后改读真实图号
-            ["version"] = "",
+            ["drawing_no"] = drawingNo, // 无工程图证据时以文件名代指；TITLE 批次后有真实图号
+            ["version"] = revision,
             ["rule_id"] = f.RuleId,
             ["standard"] = f.Standard,
             ["group"] = f.Group,

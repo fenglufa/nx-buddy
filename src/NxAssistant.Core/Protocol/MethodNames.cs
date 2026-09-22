@@ -16,6 +16,16 @@ public static class MethodNames
     public const string InspectSketch = "inspect_sketch";
     public const string InspectDrawingAnnotations = "inspect_drawing_annotations";
 
+    // §9.2 批 5 抽取类 + 撤销
+    public const string InspectLayers = "inspect_layers";
+    public const string InspectTitleBlock = "inspect_title_block";
+    public const string InspectDrawingSheet = "inspect_drawing_sheet";
+    public const string InspectWeldAnnotations = "inspect_weld_annotations";
+    public const string InspectPartsList = "inspect_parts_list";
+    public const string InspectSheetThickness = "inspect_sheet_thickness";
+    public const string InspectHolePattern = "inspect_hole_pattern";
+    public const string UndoLastAssistantChange = "undo_last_assistant_change";
+
     // §9.1 写
     public const string SaveWorkPart = "save_work_part";
     public const string CreatePart = "create_part";

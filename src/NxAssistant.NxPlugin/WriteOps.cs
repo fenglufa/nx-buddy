@@ -43,6 +43,7 @@ internal static partial class ToolService
                 NXOpen.Features.Feature.BooleanType.Create, null!);
             var feature = builder.CommitFeature();
             session.SetUndoMarkName(mark, "NXA create block");
+            AssistantMarks.Record(work, mark, "NXA create block");
             return new Dictionary<string, object?>
             {
                 ["ok"] = true,
@@ -99,6 +100,7 @@ internal static partial class ToolService
             var feature = builder.CommitFeature();
             feature.SetName(featureName);
             session.SetUndoMarkName(mark, "NXA cylindrical hole");
+            AssistantMarks.Record(work, mark, "NXA cylindrical hole");
             return new Dictionary<string, object?>
             {
                 ["ok"] = true,
@@ -149,6 +151,7 @@ internal static partial class ToolService
             var feature = builder.CommitFeature();
             feature.SetName(featureName);
             session.SetUndoMarkName(mark, "NXA fillet edges");
+            AssistantMarks.Record(work, mark, "NXA fillet edges");
             return new Dictionary<string, object?>
             {
                 ["ok"] = true,
@@ -196,6 +199,7 @@ internal static partial class ToolService
             var feature = builder.CommitFeature();
             feature.SetName(featureName);
             session.SetUndoMarkName(mark, "NXA chamfer edges");
+            AssistantMarks.Record(work, mark, "NXA chamfer edges");
             return new Dictionary<string, object?>
             {
                 ["ok"] = true,
@@ -271,6 +275,7 @@ internal static partial class ToolService
                     "Move Body cannot reposition feature-driven bodies such as extrusions; " +
                     "edit the owning feature parameters instead.");
             }
+            AssistantMarks.Record(work, mark, "NXA move object");
             return new Dictionary<string, object?>
             {
                 ["ok"] = true,
@@ -489,9 +494,11 @@ internal static partial class ToolService
         var mark = session.SetUndoMark(Session.MarkVisibility.Visible, "NXA import exchange");
         int updateErrors = session.UpdateManager.DoUpdate(mark);
         int bodiesAfter = CountBodies(work), featuresAfter = CountFeatures(work);
+        bool importOk = updateErrors == 0 && bodiesAfter > bodiesBefore;
+        if (importOk) AssistantMarks.Record(work, mark, "NXA import exchange");
         return new Dictionary<string, object?>
         {
-            ["ok"] = updateErrors == 0 && bodiesAfter > bodiesBefore,
+            ["ok"] = importOk,
             ["format"] = format,
             ["application_protocol"] = protocol,
             ["part"] = work.Leaf,
@@ -782,6 +789,7 @@ internal static partial class ToolService
             var status = sketch.GetStatus(out int _).ToString();
             sketch.Deactivate(NXOpen.Sketch.ViewReorient.False, NXOpen.Sketch.UpdateLevel.Model);
             session.SetUndoMarkName(mark, "NXA create parametric sketch");
+            AssistantMarks.Record(work, mark, "NXA create parametric sketch");
 
             return new Dictionary<string, object?>
             {
@@ -908,6 +916,7 @@ internal static partial class ToolService
             feature.SetName(featureName);
             sketch.Blank();
             session.SetUndoMarkName(mark, "NXA extrude sketch");
+            AssistantMarks.Record(work, mark, "NXA extrude sketch");
         }
         catch
         {
@@ -973,6 +982,7 @@ internal static partial class ToolService
                 throw new InvalidOperationException(
                     $"feature update failed: update_errors={updateErrors} messages=[{string.Join("; ", errors)}] out_of_date={feature.IsOutOfDate()}");
             session.SetUndoMarkName(mark, "NXA set feature expression");
+            AssistantMarks.Record(work, mark, "NXA set feature expression");
             return new Dictionary<string, object?>
             {
                 ["ok"] = true,
@@ -1073,14 +1083,14 @@ internal static partial class ToolService
             origin[1] + uv[0] * uAxis[1] + uv[1] * vAxis[1],
             origin[2] + uv[0] * uAxis[2] + uv[1] * vAxis[2]);
 
-    private static int CountBodies(Part work)
+    internal static int CountBodies(Part work)
     {
         int n = 0;
         foreach (Body unused in work.Bodies) n++;
         return n;
     }
 
-    private static int CountFeatures(Part work)
+    internal static int CountFeatures(Part work)
     {
         int n = 0;
         foreach (NXOpen.Features.Feature unused in work.Features) n++;

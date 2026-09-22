@@ -245,11 +245,43 @@ public static class RuleEngine
         var required = Strs(pack.Data(r, "drawing_frames"), "required_title_block_fields");
         foreach (var s in dw.Sheets)
         {
-            var missing = required.Where(k => !s.TitleBlock.TryGetValue(k, out var v) || string.IsNullOrWhiteSpace(v)).ToList();
+            var missing = required.Where(k => string.IsNullOrWhiteSpace(TitleField(pack, r, s, k))).ToList();
             if (missing.Count == 0) continue;
             yield return Make(r, enf, "标题栏", "sheet",
                 "标题栏必填字段缺失/为空：" + string.Join("、", missing), missing.ToList());
         }
+    }
+
+    /// <summary>
+    /// 规范字段名 → 图纸页属性标题：先按字段名本身（忽略大小写），再查 title_block_fields.json
+    /// 别名表（占位行业惯用名，待客户真实图样属性标题确认后替换）；查不到返回空串。
+    /// </summary>
+    public static string TitleField(RulePack pack, RuleDef r, SheetEvidence s, string field)
+    {
+        foreach (var kv in s.TitleBlock)
+            if (string.Equals(kv.Key, field, StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrWhiteSpace(kv.Value))
+                return kv.Value.Trim();
+        if (pack.TryData(r, "title_block_fields", out var data) &&
+            data.TryGetProperty("field_titles", out var ft) &&
+            ft.TryGetProperty(field, out var aliases))
+            foreach (var a in aliases.EnumerateArray())
+            {
+                var title = a.GetString();
+                if (title == null) continue;
+                foreach (var kv in s.TitleBlock)
+                    if (string.Equals(kv.Key, title, StringComparison.OrdinalIgnoreCase) &&
+                        !string.IsNullOrWhiteSpace(kv.Value))
+                        return kv.Value.Trim();
+            }
+        return "";
+    }
+
+    /// <summary>宿主报告行取真实图号/版本用：以 TITLE-001 为锚解析别名表。</summary>
+    public static string TitleField(RulePack pack, SheetEvidence s, string field)
+    {
+        var anchor = pack.Rules.FirstOrDefault(x => x.Id == "TITLE-001");
+        return anchor == null ? "" : TitleField(pack, anchor, s, field);
     }
 
     private static IEnumerable<Finding> TitleRegex(RulePack pack, RuleDef r, DrawingEvidence? dw, string enf,
@@ -262,7 +294,8 @@ public static class RuleEngine
         catch { yield break; }
         foreach (var s in dw.Sheets)
         {
-            if (!s.TitleBlock.TryGetValue(field, out var val) || string.IsNullOrWhiteSpace(val)) continue; // 缺失由 TITLE-001 管
+            var val = TitleField(pack, r, s, field);
+            if (string.IsNullOrEmpty(val)) continue; // 缺失由 TITLE-001 管
             if (rx.IsMatch(val)) continue;
             yield return Make(r, enf, label, val, $"字段 {field} 不符合编码格式 /{pattern}/");
         }
@@ -274,7 +307,8 @@ public static class RuleEngine
         var allowed = Strs(pack.Data(r, "part_number_pattern"), "material_whitelist");
         foreach (var s in dw.Sheets)
         {
-            if (!s.TitleBlock.TryGetValue("material", out var m) || string.IsNullOrWhiteSpace(m)) continue;
+            var m = TitleField(pack, r, s, "material");
+            if (string.IsNullOrEmpty(m)) continue;
             if (allowed.Contains(m, StringComparer.Ordinal)) continue;
             yield return Make(r, enf, "材料", m, "材料不在公司白名单内", allowed.ToList());
         }
@@ -305,6 +339,8 @@ public static class RuleEngine
             foreach (var d in s.Dimensions)
             {
                 if (string.IsNullOrEmpty(d.Layer)) continue;
+                // 占位守卫：NX 侧图层名解析待客户样件校准，纯数字图层不做阻断判定。
+                if (int.TryParse(d.Layer, out _)) continue;
                 if (must.Contains(d.Layer)) continue;
                 yield return Make(r, enf, "尺寸", d.Layer, "尺寸不在 DIM 层", must.ToList());
             }

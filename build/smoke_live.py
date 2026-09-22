@@ -470,6 +470,46 @@ def main():
     print("J5 审图未扰动用户工作部件 ->", after_part["name"])
 
     shutil.rmtree(review_dir, ignore_errors=True)
+
+    # ---- 阶段 K：批 5 抽取类 inspect_* + undo_last_assistant_change（mark+指纹双校验） ----
+    up = payload(h2.call("create_part", {"file_name": f"NXA_LIVE_undo_{sfx}", "units": "millimeters"}))
+    assert up.get("ok"), up
+    u0 = payload(h2.call("undo_last_assistant_change"))
+    assert u0.get("ok") is not True and "没有可撤销" in json.dumps(u0, ensure_ascii=False), u0
+
+    kb = payload(h2.call("create_block", {"length": 50, "width": 40, "height": 20}))
+    assert kb.get("ok") and kb["body_count"] == 1, kb
+    u1 = payload(h2.call("undo_last_assistant_change"))
+    assert u1.get("ok") and u1["undone_change"] == "NXA create block" and u1["body_count_after"] == 0, u1
+    kb2 = payload(h2.call("create_block", {"length": 60, "width": 40, "height": 12}))
+    assert kb2.get("ok") and kb2["body_count"] == 1, kb2
+    rbk = payload(h2.call("rebuild_work_part"))
+    assert rbk.get("ok"), rbk
+    u2 = payload(h2.call("undo_last_assistant_change"))
+    assert u2.get("ok") and u2["body_count_after"] == 0, u2
+    u3 = payload(h2.call("undo_last_assistant_change"))
+    assert u3.get("ok") is not True and "没有可撤销" in json.dumps(u3, ensure_ascii=False), u3
+
+    kb3 = payload(h2.call("create_block", {"length": 60, "width": 40, "height": 12}))
+    assert kb3.get("ok"), kb3
+    th = payload(h2.call("inspect_sheet_thickness"))
+    assert th.get("ok") and abs(th["plate_thickness"] - 12.0) < 1e-6, th
+    lay = payload(h2.call("inspect_layers"))
+    assert lay.get("ok") and len(lay["body_layers"]) >= 1 and sum(lay["layer_counts"].values()) >= 1, lay
+    hp = payload(h2.call("inspect_hole_pattern"))
+    assert hp.get("ok") and hp["hole_count"] == 0 and hp["patterns"] == [], hp
+    for name in ("inspect_title_block", "inspect_drawing_sheet", "inspect_weld_annotations"):
+        r = payload(h2.call(name))
+        assert r.get("ok") and r["drawing_sheet_count"] == 0, (name, r)
+    pl = payload(h2.call("inspect_parts_list"))
+    assert pl.get("ok") and pl["parts_list_count"] == 0, pl
+    an = payload(h2.call("inspect_drawing_annotations"))
+    assert an.get("ok") and an["note_count"] == 0, an
+    sv = payload(h2.call("save_work_part"))
+    assert sv.get("file_exists"), sv
+    print("K1-K2 block↔undo 闭环、rebuild no-op mark 不阻断回退、账本用完即拒")
+    print("K3-K5 抽取负路径(无图纸页/无注释) + bbox 板厚启发 =", th["plate_thickness"],
+          "| 图层分布 =", lay["layer_counts"])
     h2.close()
     print(f"SMOKE LIVE PASS (pid={pid}, part={c2.get('full_path')})")
     return 0

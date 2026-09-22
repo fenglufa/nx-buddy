@@ -12,7 +12,8 @@ namespace NxAssistant.NxPlugin;
 /// 审图证据抽取（内部方法 extract_evidence，供宿主 review_folder 长任务调用）。
 /// 在 FILE-001 沙箱内按路径打开 .prt（非显示打开、只读抽取、抽完即关），产出 Evidence.Part 段的 JSON。
 /// 抽取范围按 V1 金样契约：孔=减料圆柱/孔特征柱面直径（特征名前缀承载 pin/sensor 语义，见 test/drawings/README.md）、
-/// 实体/片体计数、圆角半径。缺段的证据（extrude/图面）留空——规则引擎"缺证据即跳过"。
+/// 实体/片体计数、圆角半径；批 5 起补板厚启发、圆形孔组探测与工程图段（有图纸页才产出，见 InspectOps.BuildDrawingEvidence）。
+/// 缺段的证据（extrude 等）留空——规则引擎"缺证据即跳过"。
 /// 绝不保存被审文件；关闭仅针对本次调用打开的部件，用户已加载的部件不动。
 /// </summary>
 internal static partial class ToolService
@@ -89,7 +90,11 @@ internal static partial class ToolService
                 ["reused_already_loaded"] = !weOpened,
                 ["close_error"] = closeError,
                 ["work_part_after"] = workPartAfter,
-                ["evidence"] = new Dictionary<string, object?> { ["part"] = evidence },
+                ["evidence"] = new Dictionary<string, object?>
+                {
+                    ["part"] = evidence,
+                    ["drawing"] = BuildDrawingEvidence(target), // 无图纸页=null：规则引擎缺证据即跳过
+                },
             };
         }
         finally
@@ -178,6 +183,10 @@ internal static partial class ToolService
             ["sheet_bodies"] = sheets,
             ["holes"] = holes,
             ["fillets"] = fillets,
+            // 批 5 追加段：板厚启发（实体最小包围盒棱长，见 InspectOps.ThicknessProbe 注释）
+            // 与圆形孔组探测（DescribePatterns 同 inspect_hole_pattern 口径）。
+            ["plate_thickness"] = ThicknessProbe(part).thickness,
+            ["hole_patterns"] = DescribePatterns(CollectCylindricalHoles(uf, part)),
         };
     }
 
@@ -207,6 +216,13 @@ internal static partial class ToolService
 
     private static (int ufType, double radius) AskFaceShape(NXOpen.UF.UFSession uf, NXOpen.Face face)
     {
+        var (t, r, _, _) = AskFaceShapeFull(uf, face);
+        return (t, r);
+    }
+
+    private static (int ufType, double radius, double[] point, double[] dir) AskFaceShapeFull(
+        NXOpen.UF.UFSession uf, NXOpen.Face face)
+    {
         try
         {
             var point = new double[3];
@@ -214,9 +230,9 @@ internal static partial class ToolService
             var box = new double[6];
             uf.Modl.AskFaceData(face.Tag, out int ufType, point, dir, box,
                 out double radius, out double minorRadius, out int normDir);
-            return (ufType, radius);
+            return (ufType, radius, point, dir);
         }
-        catch { return (-1, 0); }
+        catch { return (-1, 0, new double[3], new double[3]); }
     }
 
     /// <summary>test/drawings README 命名契约：NXA_PIN_*→销轴孔、NXA_SENSOR_*→传感器安装孔，其余按通光孔系列判定。</summary>

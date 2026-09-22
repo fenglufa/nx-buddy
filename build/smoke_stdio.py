@@ -48,6 +48,10 @@ def main():
                 "inspect_sketch", "extrude_sketch", "set_feature_expression",
                 "create_cylindrical_hole", "fillet_edges", "chamfer_edges", "move_object",
                 "export_exchange", "import_exchange",
+                "inspect_layers", "inspect_drawing_annotations", "inspect_title_block",
+                "inspect_drawing_sheet", "inspect_weld_annotations", "inspect_parts_list",
+                "inspect_sheet_thickness", "inspect_hole_pattern",
+                "undo_last_assistant_change",
                 "review_folder", "review_status", "review_findings"}
     missing = expected - set(names)
     assert not missing, f"missing tools: {missing}"

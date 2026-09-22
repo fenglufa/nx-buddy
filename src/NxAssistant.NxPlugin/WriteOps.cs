@@ -123,6 +123,123 @@ internal static partial class ToolService
         }
     }
 
+    // ---- fillet_edges / chamfer_edges（EdgeBlend/Chamfer builder；edge_indices 与
+    //      inspect_body_topology 的 edge index 同源，均按 body.GetEdges() 顺序） ----
+
+    private static object FilletEdges(JsonElement p)
+    {
+        var work = Work();
+        var session = Session.GetSession();
+        var body = BodyByIndex(work, (int)FiniteNum(p, "body_index", 0));
+        var edges = EdgesByIndices(body, p);
+        double radius = PositiveNum(p, "radius", null);
+        var featureName = SafeObjectName(OptString(p, "feature_name") ?? string.Empty, "MCP_FILLET");
+        var tags = edges.Select(e => (long)e.Tag).ToList();
+
+        var mark = session.SetUndoMark(Session.MarkVisibility.Visible, "NXA fillet edges");
+        NXOpen.Features.EdgeBlendBuilder builder = null;
+        try
+        {
+            builder = work.Features.CreateEdgeBlendBuilder(null!);
+            var collector = work.ScCollectors.CreateCollector();
+            var rule = work.ScRuleFactory.CreateRuleEdgeDumb(edges);
+            collector.ReplaceRules(new NXOpen.SelectionIntentRule[] { rule }, false);
+            builder.AddChainset(collector, FmtNum(radius));
+            var feature = builder.CommitFeature();
+            feature.SetName(featureName);
+            session.SetUndoMarkName(mark, "NXA fillet edges");
+            return new Dictionary<string, object?>
+            {
+                ["ok"] = true,
+                ["name"] = feature.Name,
+                ["journal_id"] = feature.JournalIdentifier,
+                ["radius"] = radius,
+                ["selected_edge_tags"] = tags,
+                ["part_body_count"] = CountBodies(work),
+            };
+        }
+        catch
+        {
+            try { session.UndoToMark(mark, null); } catch { /* 尽力回滚 */ }
+            throw;
+        }
+        finally
+        {
+            try { builder?.Destroy(); } catch { /* ignore */ }
+        }
+    }
+
+    private static object ChamferEdges(JsonElement p)
+    {
+        var work = Work();
+        var session = Session.GetSession();
+        var body = BodyByIndex(work, (int)FiniteNum(p, "body_index", 0));
+        var edges = EdgesByIndices(body, p);
+        double distance = PositiveNum(p, "distance", null);
+        var featureName = SafeObjectName(OptString(p, "feature_name") ?? string.Empty, "MCP_CHAMFER");
+        var tags = edges.Select(e => (long)e.Tag).ToList();
+
+        var mark = session.SetUndoMark(Session.MarkVisibility.Visible, "NXA chamfer edges");
+        NXOpen.Features.ChamferBuilder builder = null;
+        try
+        {
+            builder = work.Features.CreateChamferBuilder(null!);
+            var collector = work.ScCollectors.CreateCollector();
+            var rule = work.ScRuleFactory.CreateRuleEdgeDumb(edges);
+            collector.ReplaceRules(new NXOpen.SelectionIntentRule[] { rule }, false);
+            builder.SmartCollector = collector;
+            builder.Method = NXOpen.Features.ChamferBuilder.OffsetMethod.EdgesAlongFaces;
+            builder.Option = NXOpen.Features.ChamferBuilder.ChamferOption.SymmetricOffsets;
+            builder.FirstOffsetExp.RightHandSide = FmtNum(distance);
+            builder.SecondOffsetExp.RightHandSide = FmtNum(distance);
+            var feature = builder.CommitFeature();
+            feature.SetName(featureName);
+            session.SetUndoMarkName(mark, "NXA chamfer edges");
+            return new Dictionary<string, object?>
+            {
+                ["ok"] = true,
+                ["name"] = feature.Name,
+                ["journal_id"] = feature.JournalIdentifier,
+                ["distance"] = distance,
+                ["selected_edge_tags"] = tags,
+                ["part_body_count"] = CountBodies(work),
+            };
+        }
+        catch
+        {
+            try { session.UndoToMark(mark, null); } catch { /* 尽力回滚 */ }
+            throw;
+        }
+        finally
+        {
+            try { builder?.Destroy(); } catch { /* ignore */ }
+        }
+    }
+
+    /// <summary>镜像 _items_by_indices：非空 int 数组、越界与重复都报错，按 body.GetEdges() 顺序取边。</summary>
+    private static NXOpen.Edge[] EdgesByIndices(Body body, JsonElement p)
+    {
+        var all = body.GetEdges();
+        if (!p.TryGetProperty("edge_indices", out var v) || v.ValueKind != JsonValueKind.Array ||
+            v.GetArrayLength() == 0)
+            throw new ArgumentException("edge_indices must be a non-empty list");
+        var picked = new List<NXOpen.Edge>();
+        var seen = new HashSet<long>();
+        foreach (var raw in v.EnumerateArray())
+        {
+            if (raw.ValueKind != JsonValueKind.Number)
+                throw new ArgumentException("edge_indices must contain integers");
+            var index = (int)raw.GetDouble();
+            if (index < 0 || index >= all.Length)
+                throw new ArgumentException($"edge index {index} is out of range for {all.Length} items");
+            var edge = all[index];
+            if (!seen.Add((long)edge.Tag))
+                throw new ArgumentException("edge_indices must not contain duplicates");
+            picked.Add(edge);
+        }
+        return picked.ToArray();
+    }
+
     // ---- create_parametric_sketch（平面/轴向 + line/rect/circle/arc + 约束 + 尺寸表达式） ----
 
     private static readonly Dictionary<string, (double[] U, double[] V, double[] N)> PrincipalPlanes = new()

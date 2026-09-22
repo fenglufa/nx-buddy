@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -287,6 +288,74 @@ public sealed class NxTools
             if (feature_name != null) p["feature_name"] = feature_name;
             return _plugin.CallAsync(MethodNames.CreateCylindricalHole, p, ct);
         }, ct);
+    }
+
+    [McpServerTool(Name = "fillet_edges")]
+    [Description("对实体指定边倒圆角（EdgeBlendBuilder+Chainset；edge_indices 非空、不重复，与 inspect_body_topology 的边 index 同源）。FEAT-FILLET-002 为 warn 级守卫：半径不在建议系列（0.5/1/1.5/2/3/5）不拦截成孔，但响应附 rule_warnings+建议值。失败自动回滚。需有效授权。")]
+    public Task<JsonElement> FilletEdges(
+        double radius,
+        JsonElement edge_indices,
+        int body_index = 0,
+        string? feature_name = null,
+        CancellationToken ct = default)
+    {
+        return Guard(async () =>
+        {
+            _license.EnsureValid("fillet_edges");
+            var p = new Dictionary<string, object?>
+            {
+                ["radius"] = radius,
+                ["body_index"] = body_index,
+                ["edge_indices"] = edge_indices,
+            };
+            if (feature_name != null) p["feature_name"] = feature_name;
+            var result = await _plugin.CallAsync(MethodNames.FilletEdges, p, ct);
+            return AttachRuleWarnings(result, HostRules.FilletWarnings(radius));
+        }, ct);
+    }
+
+    [McpServerTool(Name = "chamfer_edges")]
+    [Description("对实体指定边对称倒角（ChamferBuilder EdgesAlongFaces+SymmetricOffsets，两偏置=distance；edge_indices 规则同 fillet_edges）。失败自动回滚。需有效授权。")]
+    public Task<JsonElement> ChamferEdges(
+        double distance,
+        JsonElement edge_indices,
+        int body_index = 0,
+        string? feature_name = null,
+        CancellationToken ct = default)
+    {
+        return Guard(() =>
+        {
+            _license.EnsureValid("chamfer_edges");
+            var p = new Dictionary<string, object?>
+            {
+                ["distance"] = distance,
+                ["body_index"] = body_index,
+                ["edge_indices"] = edge_indices,
+            };
+            if (feature_name != null) p["feature_name"] = feature_name;
+            return _plugin.CallAsync(MethodNames.ChamferEdges, p, ct);
+        }, ct);
+    }
+
+    /// warn 级规则告警随成功响应附带返回（不改变 ok 语义，不拦截写入）。
+    private static JsonElement AttachRuleWarnings(JsonElement result, IReadOnlyList<NxAssistant.Rules.Finding> warnings)
+    {
+        if (warnings.Count == 0 ||
+            result.ValueKind != JsonValueKind.Object ||
+            !result.TryGetProperty("ok", out var ok) || ok.ValueKind != JsonValueKind.True)
+            return result;
+        var node = JsonNode.Parse(result.GetRawText())!.AsObject();
+        var arr = new JsonArray();
+        foreach (var f in warnings)
+        {
+            arr.Add(JsonNode.Parse(JsonSerializer.Serialize(new Dictionary<string, object?>
+            {
+                ["rule_id"] = f.RuleId, ["name"] = f.Name, ["message"] = f.Message,
+                ["suggestions"] = f.Suggestions, ["placeholder"] = f.Placeholder,
+            })));
+        }
+        node["rule_warnings"] = arr;
+        return JsonDocument.Parse(node.ToJsonString()!).RootElement;
     }
 
     /// <summary>

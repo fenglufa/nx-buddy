@@ -10,6 +10,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 
 
 class Host:
@@ -238,6 +239,48 @@ def main():
     e4 = payload(h2.call("save_work_part"))
     assert e4.get("file_exists"), e4
     print("E4 save ->", e4["full_path"], e4["file_size"], "bytes")
+
+    # ---- 阶段 F：fillet/chamfer + FEAT-FILLET-002 warn 守卫 ----
+    # 每步用独立的全新"简单块"样件，避免前一步特征改变拓扑后 edge index 漂移干扰断言。
+    sfx = str(int(time.time()))
+
+    def fresh_block(name):
+        cp = payload(h2.call("create_part", {"file_name": name, "units": "millimeters"}))
+        assert cp.get("ok"), cp
+        b = payload(h2.call("create_block", {"length": 50, "width": 30, "height": 20}))
+        assert b.get("ok") and b.get("body_count") == 1, b
+        t = payload(h2.call("inspect_body_topology", {"body_index": 0}))
+        assert t.get("ok"), t
+        return t["edges"]
+
+    edges = fresh_block(f"NXA_LIVE_fillet10_{sfx}")
+    f1 = payload(h2.call("fillet_edges", {
+        "radius": 3.0, "edge_indices": [max(edges, key=lambda e: e["length"])["index"]],
+        "feature_name": "MCP_FILLET_R3",
+    }))
+    assert f1.get("ok") and "rule_warnings" not in f1, f1
+    print("F1 fillet r=3（系列内）->", f1["name"], "无告警")
+
+    edges = fresh_block(f"NXA_LIVE_fillet27_{sfx}")
+    f2 = payload(h2.call("fillet_edges", {
+        "radius": 2.7, "edge_indices": [max(edges, key=lambda e: e["length"])["index"]],
+    }))
+    assert f2.get("ok"), f2
+    w0 = (f2.get("rule_warnings") or [{}])[0]
+    assert w0.get("rule_id") == "FEAT-FILLET-002" and w0.get("suggestions"), f2
+    print("F2 fillet r=2.7 成孔但带 warn ->", w0["message"], "| 建议 =", w0["suggestions"])
+
+    edges = fresh_block(f"NXA_LIVE_chamfer_{sfx}")
+    f3 = payload(h2.call("chamfer_edges", {
+        "distance": 2.0, "edge_indices": [min(edges, key=lambda e: e["length"])["index"]],
+        "feature_name": "MCP_CHAMFER2",
+    }))
+    assert f3.get("ok"), f3
+    rb3 = payload(h2.call("rebuild_work_part"))
+    assert rb3.get("ok") is True and rb3.get("update_error_count") == 0, rb3
+    f4 = payload(h2.call("save_work_part"))
+    assert f4.get("file_exists"), f4
+    print("F3 chamfer d=2 + rebuild 0 错 ->", f3["name"], "; F4 save ->", f4["file_size"], "bytes")
     h2.close()
     print(f"SMOKE LIVE PASS (pid={pid}, part={c2.get('full_path')})")
     return 0

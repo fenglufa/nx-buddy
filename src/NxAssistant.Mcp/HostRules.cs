@@ -41,6 +41,20 @@ internal static class HostRules
             $"写前规则拦截 [{first.RuleId} {first.Name}]：{first.Message}{hints}", blocking);
     }
 
+    /// <summary>圆角半径守卫（FEAT-FILLET-002，warn 级不阻断）：返回应随响应附带的告警。</summary>
+    public static IReadOnlyList<Finding> FilletWarnings(double radius)
+    {
+        var pack = LoadPack();
+        if (pack == null) return Array.Empty<Finding>(); // warn 级：缺包不拦截成孔，仅无告警
+        var ev = new Evidence
+        {
+            Part = new PartEvidence { Fillets = { new FilletEvidence { Radius = radius } } },
+        };
+        return RuleEngine.Evaluate(pack, ev)
+            .Where(f => f.RuleId == "FEAT-FILLET-002" && !f.IsBlocking)
+            .ToList();
+    }
+
     private static RulePack? LoadPack()
     {
         if (_pack != null || _packError != null) return _pack;

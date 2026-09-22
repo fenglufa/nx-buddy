@@ -26,7 +26,7 @@
 | 第十一片 | 托盘 NxAssistant.exe + NxaSettings 共享配置层 | cbca953 |
 | 第十二片 | 脚本安装器 install/uninstall + 端到端冒烟 | 86ac0c2 |
 | 第十二片续 | Inno Setup 壳 installer.iss + 静默装卸冒烟 | ca4047c |
-| 第十三片 | 规则可见与可管理：rules_state 覆盖层 + 托盘规则管理分页 | 本批 |
+| 第十三片 | 规则可见与可管理：rules_state 覆盖层 + 托盘规则管理分页 | 86fef2e |
 
 ## 批次详记
 

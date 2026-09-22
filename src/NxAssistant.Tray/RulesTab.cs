@@ -62,19 +62,22 @@ internal sealed class RulesTab : UserControl
             AutoGenerateColumns = false,
             ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing,
         };
-        _grid.Columns.Add(new DataGridViewCheckBoxColumn { HeaderText = "启用", DataPropertyName = ColEnabled, Width = 44 });
+        // Name 必须显式赋值：OnCellValueChanged/OnCellClick 都按 Columns[i].Name 比对语义标记。
+        // 只设 DataPropertyName 不设 Name 时 Name 为空串，两个处理器全部静默失效（装机验收发现的 bug）。
+        _grid.Columns.Add(new DataGridViewCheckBoxColumn { Name = ColEnabled, HeaderText = "启用", DataPropertyName = ColEnabled, Width = 44 });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "编号", DataPropertyName = "id", Width = 130, ReadOnly = true });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "组", DataPropertyName = "group", Width = 60, ReadOnly = true });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "名称", DataPropertyName = "name", Width = 240, ReadOnly = true });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "级别", DataPropertyName = "sev", Width = 50, ReadOnly = true });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "用户改动", DataPropertyName = "user", Width = 120, ReadOnly = true });
-        _grid.Columns.Add(new DataGridViewButtonColumn { HeaderText = "参数", Text = "改参数", UseColumnTextForButtonValue = true, DataPropertyName = ColEdit, Width = 70 });
+        _grid.Columns.Add(new DataGridViewButtonColumn { Name = ColEdit, HeaderText = "参数", Text = "改参数", UseColumnTextForButtonValue = true, DataPropertyName = ColEdit, Width = 70 });
         _grid.CellValueChanged += OnCellValueChanged;
         _grid.CurrentCellDirtyStateChanged += (_, _) =>
         {
             if (_grid.IsCurrentCellDirty) _grid.CommitEdit(DataGridViewDataErrorContexts.Commit);
         };
         _grid.CellClick += OnCellClick;
+        _grid.CellContentDoubleClick += OnRowDoubleClick;
 
         var buttons = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 40 };
         var save = new Button { Text = "保存覆盖层", AutoSize = true };
@@ -82,6 +85,13 @@ internal sealed class RulesTab : UserControl
         var reset = new Button { Text = "清空全部改动", AutoSize = true };
         reset.Click += (_, _) => ResetAll();
         buttons.Controls.AddRange(new Control[] { save, reset });
+
+        var hint = new Label
+        {
+            Dock = DockStyle.Top,
+            Height = 20,
+            Text = "操作提示：双击行看规则详情｜勾选框=禁用/启用（等效删除/恢复，基准包只读不可增删）｜\"改参数\"=编辑该规则引用的标准系列数据",
+        };
 
         _status = new Label { Dock = DockStyle.Top, Height = 22, Text = StateSummary() };
         var logTitle = new Label { Dock = DockStyle.Top, Height = 20, Text = "变更日志（最近 15 条）：" };
@@ -99,6 +109,7 @@ internal sealed class RulesTab : UserControl
         Controls.Add(logTitle);
         Controls.Add(_status);
         Controls.Add(buttons);
+        Controls.Add(hint);
         Controls.Add(_grid);
         Bind();
     }
@@ -197,6 +208,41 @@ internal sealed class RulesTab : UserControl
             _dirty = true;
             Bind();
         }
+    }
+
+    private void OnRowDoubleClick(object? sender, DataGridViewCellEventArgs e)
+    {
+        if (e.RowIndex < 0) return;
+        var row = _grid.Rows[e.RowIndex].DataBoundItem as Row;
+        var def = row == null ? null : _base.Rules.FirstOrDefault(r => r.Id == row.id);
+        if (def == null) return;
+        var files = RuleDataFiles.For(def.Id);
+        var lines = new List<string>
+        {
+            $"编号：{def.Id}（组：{def.Group}）",
+            $"名称：{def.Name}",
+            $"级别：{def.Severity}　标准：{def.Standard}",
+            $"适用对象：{(def.AppliesTo.Count > 0 ? string.Join("、", def.AppliesTo) : "全部")}",
+            $"用户改动：{(string.IsNullOrEmpty(row.user) ? "无（跟随基准包）" : row.user)}",
+        };
+        if (files.Count == 0)
+            lines.Add("数据文件：无独立参数（判定阈值内建于规则），\"改参数\"仅提示，不需要禁用时可整条关闭。");
+        else
+            foreach (var f in files)
+            {
+                var rel = _base.RelPathFor(def, f);
+                var src = _state.HasDataOverride(rel) ? "用户覆盖层" : "基准包";
+                string preview;
+                try
+                {
+                    preview = CurrentFile(def, f).GetRawText();
+                    if (preview.Length > 300) preview = preview[..300] + "…";
+                }
+                catch (Exception ex) { preview = "（读取失败：" + ex.Message + "）"; }
+                lines.Add($"数据文件：{rel}（当前生效：{src}）\n{preview}");
+            }
+        MessageBox.Show(string.Join("\n", lines), "规则详情 · " + def.Id,
+            MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
 
     private void Save()

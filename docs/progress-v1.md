@@ -29,6 +29,8 @@
 | 第十三片 | 规则可见与可管理：rules_state 覆盖层 + 托盘规则管理分页 | 86fef2e |
 | 第十四片 | 审图工作台：托盘左键主页 + MCP stdio 客户端直连宿主 | 2c42590 |
 | 第十四片续 | 装机验收修正：桌面快捷方式 + 启动即开主页 + 宿主控制台窗口隐藏 | 6b467b3 |
+| 第十四片续2 | NX 插件部署改安装尾声必做 + 结果弹窗 | 5099588 |
+| 第十四片续3 | 规则管理页交互全失效修复（列 Name 缺失） | 34bc207 |
 
 ## 批次详记
 
@@ -129,6 +131,18 @@ findings 表格（列对齐金样：图号/规则/级别/对象/实测/建议/�
 教训：WinForms 网格按 `Column.Name` 分发事件的，构造列必须同时赋 Name；此类"点了没反应"
 离线冒烟测不到，属人工验收不可替代的品类。
 
+**安装器中文化 + 升级免"文件占用"弹窗（同日第四轮装机反馈）**：用户退出托盘后重装，仍被 Inno 的
+英文 "The following applications are using files…" 框住，占用者是 `NxAssistant.Mcp.exe`。
+根因两层：直接原因是开发机上残留孤儿宿主（一个是崩溃冒烟脚本没 kill 掉的子进程，一个是 Qoder 按
+用户级 MCP 配置常驻拉起的）；但**通用原因是真实的**——任何 MCP 客户端（Qoder/Claude 等）都会把
+宿主拉起来常驻，用户升级安装时必然撞文件锁，退出托盘管不到客户端名下的宿主。修复走安装器侧：
+`installer.iss` 加 `PrepareToInstall`，安装前 `taskkill /F` 自家两个进程（先托盘后宿主，避免托盘
+按需重拉宿主的竞态，尾部 Sleep 500ms 等句柄释放）——两者皆无用户数据，装完托盘/客户端各自重拉，
+等价于自动选了"关闭应用"且不再弹框。语言问题一并处理：内嵌 Inno 官方 unofficial 简体中文语言包
+（`build/installer/Languages/ChineseSimplified.isl`，jsDelivr 取，**入库前必须补 UTF-8 BOM**，
+raw.githubusercontent 直连被墙则走 CDN）；[Languages] 只挂中文 = 全程中文、无选择对话框，
+Restart Manager 等系统文案随语言包变中文。`smoke_iss.py` 为行为级断言、不解析 iss 文本，无需改。
+
 待办（按 `tool-migration-v1.md` §5 分批）：
 - 主页/工作台人工验收：`--ui-probe` 只证构造无异常；左键开主页、审图全流程（真 NX + 金样目录）、
   规则管理交互手感需要在开发机人检一轮后再发客户（与安装向导观感同轮）。
@@ -139,5 +153,7 @@ findings 表格（列对齐金样：图号/规则/级别/对象/实测/建议/�
 - 规则占位表（待客户数据）：FLANGE-PCD/STEEL/WELD/BOM/EDGE-SAFE 的数值表目前为 placeholder，命中即标 `placeholder:true`。
 - 打包交付：脚本安装器（`build/installer/*.ps1`）与 Inno Setup 壳（`build/installer/installer.iss` + `build/make_installer.ps1`）均已过端到端冒烟；余下仅**代码签名**——2026-09-22 用户定：测试验证阶段先不采购证书（注意：nginx 用的 SSL/TLS 证书是 serverAuth 用途，不能签代码），`make_installer.ps1 -Pfx` 钩子已备。
 - 运行时前置（2026-09-22 README 整理时新发现）：当前 publish 为 **framework-dependent**（csproj 无 RuntimeIdentifier/SelfContained），裸机客户需先装 .NET 8——宿主吃 Base Runtime，托盘（WinForms）吃 **Windows Desktop Runtime**。交付前二选一：文档化前置安装，或改 `-r win-x64 --self-contained` 发布（安装包体积换免依赖）。
-- 安装向导人工验收：`smoke_iss.py` 只覆盖静默路径；双击向导（中文文案/BOM、部署结果弹窗三态：成功/缺 UGII_USER_DIR/脚本报错、桌面图标、真 startup 部署含 NX 占用暂存分支）需在开发机人检一轮后再发客户。
+- 安装向导人工验收：`smoke_iss.py` 只覆盖静默路径；双击向导（中文界面+升级免"文件占用"弹窗已随
+  第四轮落地，需人检观感；部署结果弹窗三态：成功/缺 UGII_USER_DIR/脚本报错、桌面图标、
+  真 startup 部署含 NX 占用暂存分支）需在开发机人检一轮后再发客户。
 - 托盘观感：状态窗/设置为功能版（系统图标占位），品牌图标与文案打磨待交付设计。

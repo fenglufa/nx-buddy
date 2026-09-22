@@ -83,8 +83,11 @@ pwsh build/deploy_plugin.ps1             # dist\nx_plugin → %UGII_USER_DIR%\st
 
 ### A. 双击安装包（推荐）
 
+安装包全程简体中文界面（内嵌 Inno 官方简体中文语言包，含"文件占用/重启"等系统弹窗文案）。
 运行 `NXAssistant-Setup-<版本>.exe`：向导只问两件事——装到哪（默认 `%LOCALAPPDATA%\Programs\NXAssistant`）
 和要不要桌面快捷方式（默认勾选；之后开机自启/双击桌面图标都直接打开主页）。
+升级安装会先自动关闭正在跑的本产品进程（托盘 + MCP 宿主——Qoder/Claude 等 MCP 客户端会常驻拉起
+`NxAssistant.Mcp.exe`，强杀无数据损失，装完由托盘/客户端重拉），不再弹"文件正在使用"对话框。
 NX 插件部署**不再让用户选**：安装尾声自动把 `{app}\nx_plugin` 合并复制进 `%UGII_USER_DIR%\startup`
 （只复制、不删他人文件）。检测不到 `UGII_USER_DIR`（NX 用户定制目录，由站点环境配置定义，与 NX
 装在哪个盘无关）或部署脚本失败，会弹错误提示说清原因并给出手动补部署命令；成功也会弹一句
@@ -211,5 +214,6 @@ framework-dependent 发布改自包含或文档化运行时前置、安装向导
   后续切换：把 Qoder `siemens_nx` MCP 配置指向 `E:\nx-buddy\dist\mcp\NxAssistant.Mcp.exe`。
   NX 运行中 startup DLL 会被锁定，`deploy_plugin.ps1` 会自动暂存到 `dist\nx_plugin_staged` 并在下次 NX 关闭后重跑生效。
 - Windows PowerShell 5.1 按 GBK 读无 BOM 的 UTF-8 `.ps1`，中文注释会吞行：**所有 .ps1 必须带 UTF-8 BOM 保存**。
-  同理 Inno 的 `.iss` 也必须 UTF-8 BOM，否则中文向导文案按 ANSI 码页编译成乱码（静默冒烟看不出来）。
+  同理 Inno 的 `.iss` 与语言包 `.isl` 也必须 UTF-8 BOM（jsDelivr 拉下来的 `ChineseSimplified.isl` 无 BOM，
+  入库前已补），否则中文向导文案按 ANSI 码页编译成乱码（静默冒烟看不出来）。
 - 目标框架锁定 NX 2412；占位规则数值不得写死进 C#。

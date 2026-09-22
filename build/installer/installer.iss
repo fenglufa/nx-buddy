@@ -32,8 +32,14 @@ ArchitecturesAllowed=x64
 ArchitecturesInstallIn64BitMode=x64
 UninstallDisplayIcon={app}\tray\{#MyAppExeName}
 WizardStyle=modern
+; 简体中文界面（语言包随仓库走，来源 jrsoftware/issrc 官方 unofficial 翻译，已补 UTF-8 BOM）。
+; 只挂这一种语言 = 全程中文、无语言选择对话框；Restart Manager 等系统弹窗文案也随语言包变中文。
+; LanguageName 影响 /LANG 参数与注册表 Display 名；产品面向国内用户，默认即中文。
 ; 代码签名就绪后启用（需 OV/EV 证书 + signtool 在 PATH）：
 ; signtool=... / 参考 make_installer.ps1 的签名段
+
+[Languages]
+Name: "chinesesimplified"; MessagesFile: "Languages\ChineseSimplified.isl"
 
 [Files]
 Source: "..\..\dist\mcp\*"; DestDir: "{app}\mcp"; Flags: recursesubdirs createallsubdirs; Excludes: "company_v3\*"
@@ -62,6 +68,20 @@ Filename: "{app}\tray\{#MyAppExeName}"; Description: "启动 NX 小助手托盘"
 var
   DeployMsg: String;
   DeployFailed: Boolean;
+
+// 升级安装时托盘/宿主多半在跑：托盘开机自启；MCP 客户端（Qoder/Claude 等）会持续拉起
+// NxAssistant.Mcp.exe 常驻——文件被锁就会弹 "文件正在使用" 对话框。这两个都是自家进程，
+// 强杀无用户数据损失（托盘装完即重启，宿主由客户端下次连接重拉），故在安装前主动关闭。
+// 先托盘后宿主：托盘退出会带走自己的子宿主，但运行中可能按需重拉，顺序反了会留竞态。
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  ResultCode: Integer;
+begin
+  Result := '';
+  Exec('taskkill.exe', '/F /IM NxAssistant.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec('taskkill.exe', '/F /IM NxAssistant.Mcp.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Sleep(500);   // 给文件句柄释放留一点余量
+end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
 var

@@ -142,6 +142,8 @@ V1 交付集 = §9.1 + §9.2 + `move_object` = **34 个工具**（客户 2026-09
 
 ## 5. 分批实现顺序（逐步提交，不攒代码）
 
+> 进度（2026-09-22）：批 1 骨架 ✅（8d304a0）；批 2 授权 ✅（0188b1a）；规则引擎（批 4 的引擎部分）✅ `src/NxAssistant.Rules` + `tests/NxAssistant.Rules.Tests`（φ13.2 金样）；其余进行中。
+
 按"先跑通骨架 → 再补读 → 再补写 → 最后审图长任务"推进，每批一个可验证闭环、独立提交：
 
 1. **骨架**：三组件解决方案（`NxAssistant` 托盘 net8 / `NxAssistant.Mcp` 宿主 net8 + 官方 ModelContextProtocol NuGet / `NxAssistant.NxPlugin` net48 NXOpen 插件）+ 本机 IPC（命名管道，令牌）。客户已确认旧 NX-MCP 桥可删除、无需共存，插件直接部署到 startup 目录即可。**跑通 `ping` 一条链**（Agent→MCP→IPC→插件→NX→回）。

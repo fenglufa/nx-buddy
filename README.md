@@ -30,6 +30,8 @@ python build/smoke_stdio.py dist/mcp/NxAssistant.Mcp.exe   # stdio 冒烟：init
 python build/smoke_license.py licensing/NxAssistant.KeyGen/bin/Debug/net8.0/nxa-keygen.dll \
   src/NxAssistant.Mcp/bin/Debug/net8.0/NxAssistant.Mcp.exe \
   licensing/testdata/test_private.pem licensing/testdata/test_public.pem
+# 规则引擎金样（离线，不需要 NX）：
+dotnet run --project tests/NxAssistant.Rules.Tests
 ```
 
 ## 当前进度
@@ -38,11 +40,12 @@ python build/smoke_license.py licensing/NxAssistant.KeyGen/bin/Debug/net8.0/nxa-
 stdio 冒烟通过（`tools/list` 暴露 `ping`、`license_status`）。
 **离线授权批次**：`licensing/` KeyGen 签发工具 + 共享 `NxAssistant.Licensing` 验签库（ECDSA-P256、载荷规范化、一 Key 一机、首激活锁机、seats=1、验期）；
 宿主 `license_status` 真验签、`LICENSE_INVALID` 闸门就绪；端到端冒烟 `build/smoke_license.py` 通过（含篡改必拒）。
+**规则引擎批次**：`NxAssistant.Rules` 加载 company_v3 主包 + 华恒子包（合并 28 条规则），消费"证据"模型产出 findings（standard/severity/enforcement/建议/占位标记）；
+写前拦截与审图共用；金样 `dotnet run --project tests/NxAssistant.Rules.Tests`（含 φ13.2→FAIL+建议 13/14）全绿。
 
 待办（按 `tool-migration-v1.md` §5 分批）：
 - 读/写工具批次：移植 §9.1 各 `_op_` 到 C#（含写后回读护栏、stable_id、表达式字符串通道）。
-- 规则引擎：读 company_v3 JSON，画图为防 / 审图为查同一套。
-- 审图长任务：`review_folder`/`review_status`/`review_findings`（run_id 状态机 + xlsx 报告，xlsx 用 ClosedXML）。
+- 审图长任务：`review_folder`/`review_status`/`review_findings`（run_id 状态机 + xlsx 报告，xlsx 用 ClosedXML）；把规则引擎接上 NX 证据抽取。
 - 测试图纸集：`test/` 造合规/违规样件（φ13.2 金样等），保留不删。
 
 ## 已知约束 / 红线

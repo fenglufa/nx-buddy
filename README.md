@@ -33,6 +33,10 @@ python build/smoke_license.py licensing/NxAssistant.KeyGen/bin/Debug/net8.0/nxa-
   licensing/testdata/test_private.pem licensing/testdata/test_public.pem
 # 规则引擎金样（离线，不需要 NX）：
 dotnet run --project tests/NxAssistant.Rules.Tests
+# 安装包骨架（用户级免 UAC；冒烟用假 UGII 目录，不碰真机 startup）：
+python build/smoke_installer.py
+pwsh build/installer/install.ps1      # 真装：%LOCALAPPDATA%\Programs\NXAssistant + 自启 + startup 合并部署
+pwsh build/installer/uninstall.ps1    # 按 install.json 清单卸载；用户数据保留
 ```
 
 ## 当前进度
@@ -58,11 +62,13 @@ stdio 冒烟通过（`tools/list` 暴露 `ping`、`license_status`）。
 
 **托盘 + 共享配置批次（第十一片）**：补上三组件里最后的交付面——`NxAssistant.Tray`（net8-windows，产物名 `NxAssistant.exe`，PRD §6 的"托盘 + 设置窗"）。`StatusProbe` 只读采集四类状态：授权（`LicenseManager.Check(path)`）、NX 连接（枚举 `\\.\pipe\` 命名空间判管道名在位，**不下 IPC 请求**——宿主是逐请求短连接，托盘若发 ping 会和真实请求抢单 worker 队列）、MCP 在跑（进程表）、审图忙碌（扫 `runs\*\run.json` 有无 `running`）。新增 `NxAssistant.Core/NxaSettings`：三组件统一"环境变量 > `settings.json` > 默认"的路径解析优先级（`NXA_WORKSPACE`/`NXA_RULES_DIR`/`NXA_LICENSE_PATH` 各对应 `workspace`/`rules_dir`/`license_path` 键）——插件 `Workspace.Root`、宿主 `HostRules`/`ReviewOrchestrator`/`LicenseService` 全部改走同一 `Resolve`，确保 FILE-001 沙箱根在写入侧与校验侧不再分叉；`settings.json` 由托盘"设置"分页写、宿主/插件下次解析即重读（热改）。托盘另提供 `--status-json` 无头模式（状态与 UI 解耦，供 `build/smoke_tray.py` 与技术支持一键采集）、右键"导入授权 Key"（复制到授权位并重探）、可复制的 MCP 配置片段（`command` 指向宿主绝对路径）、打开插件日志/审图报告目录。`build/build.ps1` 增发布 `dist/tray/`。**离线全绿**（`smoke_tray.py` 状态形状 + settings.json 写入→重探生效→清理回落；`smoke_stdio.py` 仍 33 工具；规则金样全绿）；**过 NX2412 实机**（`smoke_live` 全量 A–K 零回归——第十/十一片改动波及插件 `Workspace`，重跑证明沙箱根仍解析到 `%LOCALAPPDATA%\NXAssistant\workspace` 且 5 张金样判定、STEP 往返、undo 链、抽取负路径全部不变；托盘 `--expect-plugin-online true` 在 NX 起来后命中）。
 
+**安装包骨架批次（第十二片）**：`build/installer/install.ps1` + `uninstall.ps1` 把 PRD §7.1 的"Windows 安装程序"先兑现成**免 UAC 的用户级脚本安装**（正式 MSI/EXE 壳待选型，包装逻辑已可复用）。装：三组件进 `%LOCALAPPDATA%\Programs\NXAssistant`（`mcp\`、`tray\`、`nx_plugin\`），**规则包随宿主**复制到 `mcp\company_v3`——独立安装态下这是宿主规则解析链（env > settings.json > 同目录 > docs 祖先）唯一可靠落点，缺了会 fail-closed 拒掉所有受守卫写；托盘登记 `HKCU Run` 自启；startup 插件部署**复用 `deploy_plugin.ps1` 的合并语义**（只复制、绝不删他人文件，NX 占用则暂存），且安装器调的是随装副本、脱离仓库可用；`install.json` 记录安装清单。**卸载=清单驱动**：无 `install.json` 或 target 不匹配即拒删（防误指他人目录），startup 插件文件默认保留、`-RemovePluginFiles` 才按清单逐个清；`settings.json`/license/runs/workspace 属用户数据一律不动。**实机端到端冒烟**（`build/smoke_installer.py`：假 UGII 目录装→三组件+规则包+脚本落位、Run 值精确匹配、插件进假 startup→**安装态宿主跑通 stdio 33 工具**、安装态托盘 `rules_dir` 解析到随装包→按清单卸载全清→无清单目录拒删防呆；不碰真机 `%UGII_USER_DIR%`/注册表既有值）。
+
 待办（按 `tool-migration-v1.md` §5 分批）：
 - 读/写工具批次（续）：`shell_body`/`mirror_feature` 等按需排期（`import_exchange` 已随第八片落地，见上）。
 - 工程图类样件与校准（待客户）：真实图框 id、图层名反查通道、标题栏字段别名、焊缝/BOM 行文本、圆形孔组 PCD 容差、板厚启发在异形件上的替代口径——客户 2D 图纸样件到位后把第十片各负路径/占位逐项转正。
 - 规则占位表（待客户数据）：FLANGE-PCD/STEEL/WELD/BOM/EDGE-SAFE 的数值表目前为 placeholder，命中即标 `placeholder:true`。
-- 打包交付：Windows 安装程序（三组件一键装 + 可选合并 `%UGII_USER_DIR%\startup`、不覆盖既有 UGII 定制根，PRD §7.1）尚未做；当前用 `build.ps1` 产物 + `deploy_plugin.ps1` 手动部署。
+- 打包交付：`build/installer/install.ps1`/`uninstall.ps1` 用户级脚本安装已过端到端冒烟（见第十二片）；正式图形化安装包/MSI 壳与代码签名待选型。
 - 托盘观感：状态窗/设置为功能版（系统图标占位），品牌图标与文案打磨待交付设计。
 
 ## 已知约束 / 红线

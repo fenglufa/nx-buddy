@@ -8,6 +8,7 @@
 """
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -391,6 +392,84 @@ def main():
     iv = payload(h2.call("save_work_part"))
     assert iv.get("file_exists"), iv
     print("I3 save ->", iv["file_size"], "bytes")
+
+    # ---- 阶段 J：review_folder 长任务（run_id 状态机 + 五张金样判定 + xlsx 报告） ----
+    ws_root = os.environ.get("NXA_WORKSPACE") or os.path.join(
+        os.environ["LOCALAPPDATA"], "NXAssistant", "workspace")
+    review_name = f"NXA_REVIEW_J{sfx}"
+    review_dir = os.path.join(ws_root, review_name)
+    os.makedirs(review_dir, exist_ok=True)
+    gold_src = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "test", "drawings")
+    golds = sorted(f for f in os.listdir(gold_src) if f.endswith(".prt"))
+    assert len(golds) >= 5, golds
+    for f in golds:
+        shutil.copyfile(os.path.join(gold_src, f), os.path.join(review_dir, f))
+
+    esc = payload(h2.call("review_folder", {"path": "C:/Windows"}))
+    assert esc.get("ok") is not True and "FILE-001" in json.dumps(esc, ensure_ascii=False), esc
+    print("J0 沙箱外审图目录被拒 ->", esc["error"][:60])
+
+    before_part = payload(h2.call("get_part_summary"))
+    assert before_part.get("ok"), before_part
+
+    rf = payload(h2.call("review_folder", {"path": review_name}))
+    assert rf.get("ok") and rf.get("run_id") and rf["total"] == len(golds), rf
+    run_id = rf["run_id"]
+    print("J1 review_folder 立即返回 -> run_id =", run_id, "total =", rf["total"], "status =", rf["status"])
+
+    deadline = time.time() + 300
+    st = rf
+    while st.get("status") in ("queued", "running") and time.time() < deadline:
+        time.sleep(2)
+        st = payload(h2.call("review_status", {"run_id": run_id}))
+    assert st.get("status") in ("completed", "completed_with_errors"), st
+    failed_names = [os.path.basename(f["file"]) for f in st.get("failed_files") or []]
+    # 板在本会话已打开（阶段 C 用）：审同名磁盘副本时 NX 拒载重名部件，该张按设计记失败、整批继续
+    assert set(failed_names) <= {"NXA_TEST_OK_plate.prt"}, st
+    print("J2 review_status 终态 ->", st["status"], f"done={st['done']}/{st['total']}",
+          "failed =", failed_names or "无")
+
+    fnd = payload(h2.call("review_findings", {"run_id": run_id, "limit": 200}))
+    assert fnd.get("ok") and fnd["total"] >= 4, fnd
+    by = {}
+    for row in fnd["findings"]:
+        by.setdefault(os.path.basename(row["file"]), []).append(row)
+    rules_of = lambda name: {r["rule_id"]: r for r in by.get(name, [])}
+
+    ok_r = rules_of("NXA_TEST_OK_plate.prt")
+    assert "HOLE-DIA-001" not in ok_r and not any(r["enforcement"] == "block" for r in ok_r.values()), ok_r
+    bad_r = rules_of("NXA_TEST_BAD_hole132.prt")
+    gj = bad_r.get("HOLE-DIA-001")
+    assert gj and gj["enforcement"] == "block", bad_r
+    assert "13" in gj["suggestions"] and "14" in gj["suggestions"], gj
+    assert "NXA_HOLE_PH132" in str(gj["object"]), gj
+    dup_r = rules_of("NXA_TEST_WARN_dup4.prt")
+    dj = dup_r.get("HOLE-DUP-004")
+    assert dj and dj["enforcement"] == "warn", dup_r
+    assert "NXA_HOLE_A" in dj["object"], dj
+    pin_r = rules_of("NXA_TEST_HUAHENG_pin_sensor.prt")
+    p1, p2 = pin_r.get("PIN-BORE-001"), pin_r.get("SENSOR-HOLE-001")
+    assert p1 and p1["enforcement"] == "block" and p1["placeholder"], pin_r
+    assert p2 and p2["enforcement"] == "warn", p2
+    empty_r = rules_of("NXA_TEST_BAD_empty.prt")
+    assert empty_r.get("BODY-001", {}).get("enforcement") == "block", empty_r
+    print("J3 五张金样判定全部符合预期（φ13.2→HOLE-DIA-001 阻断·建议13/14·对象含孔特征名）")
+
+    assert st.get("report_path") and os.path.isfile(st["report_path"]) \
+        and os.path.getsize(st["report_path"]) > 3000, st
+    assert st.get("summary_path") and os.path.isfile(st["summary_path"]), st
+    with open(st["summary_path"], encoding="utf-8") as f:
+        summ = json.load(f)
+    assert summ["status"] == st["status"] and summ["total"] == len(golds), summ
+    print("J4 报告落盘 ->", st["report_path"], os.path.getsize(st["report_path"]),
+          "bytes; 阻断 =", summ["blocking_total"], "警告 =", summ["warn_total"])
+
+    after_part = payload(h2.call("get_part_summary"))
+    assert after_part.get("ok") and after_part.get("name") == before_part.get("name"), \
+        (before_part, after_part)
+    print("J5 审图未扰动用户工作部件 ->", after_part["name"])
+
+    shutil.rmtree(review_dir, ignore_errors=True)
     h2.close()
     print(f"SMOKE LIVE PASS (pid={pid}, part={c2.get('full_path')})")
     return 0

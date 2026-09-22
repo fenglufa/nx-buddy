@@ -29,4 +29,7 @@ public static class MethodNames
     public const string ExportExchange = "export_exchange";
     public const string ImportExchange = "import_exchange";
     public const string MoveObject = "move_object";
+
+    // 内部 IPC 方法（不对外暴露为 MCP 工具；审图长任务由宿主编排时调用）
+    public const string ExtractEvidence = "extract_evidence";
 }

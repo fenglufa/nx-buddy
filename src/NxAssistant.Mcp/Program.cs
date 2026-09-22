@@ -412,6 +412,49 @@ public sealed class NxTools
         }, ct);
     }
 
+    [McpServerTool(Name = "review_folder")]
+    [Description("审图长任务：提交工作区内的目录（FILE-001 沙箱，path 可为绝对路径或工作区相对路径），立即返回 run_id——不同步堵死对话。宿主内部串行逐张打开 *.prt、抽证据、对 company_v3 规则包判定，结束后生成 审图报告.xlsx+summary.json。Agent 协议：拿到 run_id 后告知用户总数，随后用 review_status 轮询；不要对目录里每个文件单独 inspect_*；不要按时间猜测完成。中断/失败后可用 resume_run_id 从下一张续跑。需有效授权。")]
+    public Task<JsonElement> ReviewFolder(
+        string path,
+        string? resume_run_id = null,
+        CancellationToken ct = default)
+    {
+        return Guard(() =>
+        {
+            _license.EnsureValid("review_folder");
+            return Task.FromResult(ReviewOrchestrator.Start(_plugin, path, resume_run_id));
+        }, ct);
+    }
+
+    [McpServerTool(Name = "review_status")]
+    [Description("按 run_id 查审图进度。状态落磁盘 run 文件，宿主进程重启后仍可查。status ∈ queued/running/completed/completed_with_errors/failed/cancelled/interrupted，始终带 run_id/done/total/report_path/error_code/can_resume。判读：completed 或 completed_with_errors=审完（可 review_findings 拉明细，后者附失败文件清单）；running=报进度后继续隔轮再查；failed/interrupted=原样转告用户原因，问是否用 review_folder(resume_run_id) 续跑；cancelled=已停止、报告不完整。cancel=true 可向运行中的 run 请求停止（当前张完成后生效）。")]
+    public Task<JsonElement> ReviewStatus(
+        string run_id,
+        bool cancel = false,
+        CancellationToken ct = default)
+    {
+        return Guard(() =>
+        {
+            _license.EnsureValid("review_status");
+            return Task.FromResult(ReviewOrchestrator.Status(run_id, cancel));
+        }, ct);
+    }
+
+    [McpServerTool(Name = "review_findings")]
+    [Description("拉取某 run 的 finding 明细（分页：offset/limit，limit≤500）。行结构对齐验收金样：drawing_no/version/file/rule_id/name/enforcement(block=阻断|warn)/severity/object(含孔特征名)/actual/message/suggestions/placeholder(客户待替表标记)/standard。汇总统计直接看返回的 summary_path 或 report_path 的 xlsx。")]
+    public Task<JsonElement> ReviewFindings(
+        string run_id,
+        int offset = 0,
+        int limit = 50,
+        CancellationToken ct = default)
+    {
+        return Guard(() =>
+        {
+            _license.EnsureValid("review_findings");
+            return Task.FromResult(ReviewOrchestrator.Findings(run_id, offset, limit));
+        }, ct);
+    }
+
     /// warn 级规则告警随成功响应附带返回（不改变 ok 语义，不拦截写入）。
     private static JsonElement AttachRuleWarnings(JsonElement result, IReadOnlyList<NxAssistant.Rules.Finding> warnings)
     {

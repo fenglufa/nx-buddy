@@ -72,6 +72,14 @@ internal static class HostRules
         return _pack;
     }
 
+    /// <summary>审图长任务用：加载规则包；失败时给出 fail-closed 原因。</summary>
+    public static RulePack? LoadPackForReview(out string? error)
+    {
+        var pack = LoadPack();
+        error = pack == null ? _packError ?? "规则包不可用" : null;
+        return pack;
+    }
+
     private static string? FindPackDir()
     {
         var env = Environment.GetEnvironmentVariable("NXA_RULES_DIR");

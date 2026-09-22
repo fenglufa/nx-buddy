@@ -64,4 +64,20 @@ internal static class Workspace
             throw new IOException("exchange file already exists: " + full);
         return full;
     }
+
+    /// <summary>审图批处理用：把宿主传来的 .prt 路径（绝对或工作区相对）钉在根目录内并要求存在（FILE-001 纵深防御）。</summary>
+    public static string ResolveExisting(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            throw new ArgumentException("file_path must be a non-empty string");
+        var root = Root;
+        var full = Path.IsPathRooted(path)
+            ? Path.GetFullPath(path)
+            : Path.GetFullPath(Path.Combine(root, path.Trim()));
+        if (!full.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            throw new UnauthorizedAccessException("file path escapes workspace root (FILE-001)");
+        if (!File.Exists(full))
+            throw new FileNotFoundException("part file does not exist: " + full);
+        return full;
+    }
 }

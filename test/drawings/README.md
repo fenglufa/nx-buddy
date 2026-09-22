@@ -1,7 +1,7 @@
 # 审图测试样件（保留，勿删）
 
 用 NX 2412 实机生成的 `.prt` 金样（先经旧桥造在 E:\NX-MCP\workspace，再拷入本目录持久化）。
-每个样件对应规则引擎的**预期 findings**，作为后续"证据抽取 + review_folder 长任务"批次的验收标准。
+每个样件对应规则引擎的**预期 findings**，已被 `build/smoke_live.py` 阶段 J（review_folder 长任务）作为验收标准消费。
 判定逻辑本身已由 `tests/NxAssistant.Rules.Tests` 离线覆盖；本目录覆盖的是"从真实 .prt 抽出正确证据"这一环。
 
 | 文件 | 几何 | 预期判定 |

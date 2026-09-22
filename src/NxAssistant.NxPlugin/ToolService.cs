@@ -43,6 +43,7 @@ internal static partial class ToolService
             case MethodNames.MoveObject: return MoveObject(p);
             case MethodNames.ExportExchange: return ExportExchange(p);
             case MethodNames.ImportExchange: return ImportExchange(p);
+            case MethodNames.ExtractEvidence: return ExtractEvidence(p);
             default:
                 throw new NotSupportedException($"unknown method: '{method}' (not implemented yet)");
         }

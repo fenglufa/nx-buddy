@@ -45,6 +45,8 @@ public sealed class HoleEvidence
     public string Source { get; set; } = "model";
     /// <summary>是否来自阵列/孔特征组（重复孔合规手段）。</summary>
     public bool FromArrayOrHoleSet { get; set; }
+    /// <summary>承载对象 id 用：孔特征的名称（有则报告行给出，便于图面定位）。</summary>
+    public string? FeatureName { get; set; }
 }
 
 public sealed class ExtrudeEvidence

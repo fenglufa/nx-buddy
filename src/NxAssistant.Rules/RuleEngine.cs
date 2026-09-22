@@ -104,7 +104,7 @@ public static class RuleEngine
             var series = h.Kind == "simple_blind" ? blind : through;
             if (h.Kind != "simple_through" && h.Kind != "simple_blind") continue;
             if (series.Any(s => Math.Abs(s - h.Diameter) < Eps)) continue;
-            yield return Make(r, enf, h.Source == "model" ? "模型孔" : "图纸孔注释",
+            yield return Make(r, enf, WithObj(h.Source == "model" ? "模型孔" : "图纸孔注释", h),
                 Num(h.Diameter) + "mm",
                 $"孔直径 {Num(h.Diameter)} 不在标准系列内",
                 NearestTwo(series, h.Diameter).Select(Num).ToList(),
@@ -122,14 +122,14 @@ public static class RuleEngine
             var bolt = h.NominalBolt ?? h.ThreadLabel ?? "";
             if (!table.TryGetProperty(bolt, out var row))
             {
-                yield return Make(r, enf, $"螺栓通孔 {bolt}", Num(h.Diameter) + "mm",
+                yield return Make(r, enf, WithObj($"螺栓通孔 {bolt}", h), Num(h.Diameter) + "mm",
                     $"未知公称螺纹 {bolt}，无法核对通孔直径", new List<string> { "确认螺栓规格是否在 M3–M16" });
                 continue;
             }
             var medium = Scalar(row, "medium");
             var coarse = Scalar(row, "coarse");
             if (Math.Abs(medium - h.Diameter) < Eps || Math.Abs(coarse - h.Diameter) < Eps) continue;
-            yield return Make(r, enf, $"螺栓 {bolt} 通孔", Num(h.Diameter) + "mm",
+            yield return Make(r, enf, WithObj($"螺栓 {bolt} 通孔", h), Num(h.Diameter) + "mm",
                 $"{bolt} 通孔直径应为中等/粗制系列之一", new[] { Num(medium), Num(coarse) }.ToList());
         }
     }
@@ -142,7 +142,7 @@ public static class RuleEngine
         {
             var t = h.ThreadLabel ?? "";
             if (allowed.Contains(t, StringComparer.OrdinalIgnoreCase)) continue;
-            yield return Make(r, enf, "螺纹孔", t,
+            yield return Make(r, enf, WithObj("螺纹孔", h), t,
                 $"螺纹规格 {t} 不在公司白名单（M3–M16 粗牙）内", allowed.ToList());
         }
     }
@@ -155,9 +155,13 @@ public static class RuleEngine
             .GroupBy(h => Math.Round(h.Diameter, 4))
             .Where(g => g.Count() >= 4);
         foreach (var g in groups)
-            yield return Make(r, "warn", "重复孔", Num(g.Key) + "mm",
+        {
+            var names = g.Select(h => h.FeatureName).Where(n => !string.IsNullOrEmpty(n)).ToList();
+            yield return Make(r, "warn", "重复孔" + (names.Count > 0 ? "（" + string.Join("、", names) + "）" : ""),
+                Num(g.Key) + "mm",
                 $"直径 {Num(g.Key)} 的独立孔特征有 {g.Count()} 个，建议改用阵列或孔特征组",
                 new List<string> { "使用矩形/圆形阵列或孔特征组" });
+        }
     }
 
     // ===================== 草图 / 特征 =====================
@@ -384,7 +388,7 @@ public static class RuleEngine
         foreach (var h in part.Holes.Where(h => h.Kind == "pin"))
         {
             if (allowed.Any(a => Math.Abs(a - h.Diameter) < Eps)) continue;
-            yield return Make(r, enf, "销轴/轮轴孔", Num(h.Diameter) + "mm", "销轴孔径不在系列内",
+            yield return Make(r, enf, WithObj("销轴/轮轴孔", h), Num(h.Diameter) + "mm", "销轴孔径不在系列内",
                 NearestTwo(allowed, h.Diameter).Select(Num).ToList(), IsPlaceholder(pack, r, "pin_bore"));
         }
     }
@@ -400,7 +404,7 @@ public static class RuleEngine
             var okDia = clearance.Any(c => Math.Abs(c - h.Diameter) < Eps);
             var okThread = (h.ThreadLabel ?? "") != "" && threads.Contains(h.ThreadLabel!, StringComparer.OrdinalIgnoreCase);
             if (okDia || okThread) continue;
-            yield return Make(r, "warn", "传感器安装孔", Num(h.Diameter) + "mm",
+            yield return Make(r, "warn", WithObj("传感器安装孔", h), Num(h.Diameter) + "mm",
                 "传感器安装孔不在允许通孔/螺纹系列（仅卡安装孔径，不查激光视野）",
                 clearance.Select(Num).Concat(threads).ToList(), IsPlaceholder(pack, r, "sensor_holes"));
         }
@@ -415,6 +419,10 @@ public static class RuleEngine
         Severity = r.Severity, Enforcement = enf, Subject = subject, Value = value,
         Message = message, Suggestions = suggestions ?? Array.Empty<string>(), Placeholder = placeholder,
     };
+
+    /// <summary>finding 主题带上孔特征名（§7.5 报告行需要对象 id）；无名则维持原主题。</summary>
+    private static string WithObj(string subject, HoleEvidence h) =>
+        string.IsNullOrEmpty(h.FeatureName) ? subject : $"{subject}（{h.FeatureName}）";
 
     private static List<double> NearestTwo(IEnumerable<double> series, double value)
     {

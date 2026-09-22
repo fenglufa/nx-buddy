@@ -53,6 +53,8 @@ internal sealed class TrayAppContext : ApplicationContext
         _timer.Tick += (_, _) => Refresh();
         _timer.Start();
         Refresh();
+        // 启动即展示主页（用户反馈：只在托盘冒个图标不知道装没装上）；关主页=隐藏回托盘。
+        ShowMain();
     }
 
     private ContextMenuStrip BuildMenu()

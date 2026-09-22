@@ -85,6 +85,7 @@ pwsh build/deploy_plugin.ps1             # dist\nx_plugin → %UGII_USER_DIR%\st
 
 运行 `NXAssistant-Setup-<版本>.exe`：向导中选装组件，若机器上有 `%UGII_USER_DIR%` 会出现
 "把 NX 插件合并部署进 startup"任务（勾选即随装部署，之后重启 NX 加载）。
+"创建桌面快捷方式"任务默认勾选——之后开机/双击桌面图标都会直接打开主页。
 装完可选立即启动托盘，并在 `HKCU\...\Run` 登记自启。
 
 静默/批量推送（IT 友好）：
@@ -92,6 +93,7 @@ pwsh build/deploy_plugin.ps1             # dist\nx_plugin → %UGII_USER_DIR%\st
 ```powershell
 NXAssistant-Setup-1.0.0.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /TASKS=deployplugin
 # /DIR="..." 可改安装位置；deployplugin 任务要求进程环境里有 UGII_USER_DIR
+# 注意：显式给 /TASKS 时未列出的任务不生效；静默装也要桌面图标写 /TASKS="deployplugin desktopicon"
 ```
 
 ### B. 脚本安装器（无安装包的内部/远程场景）
@@ -113,14 +115,15 @@ pwsh build/installer/uninstall.ps1     # 按 install.json 清单卸载；-Remove
 %LOCALAPPDATA%\NXAssistant\            用户数据：settings.json / license.lic / rules_state.json / runs\ / workspace\
 ```
 
-**卸载**（控制面板或 `unins000.exe /VERYSILENT`）：删除安装目录 + 撤销 Run 自启 +
+**卸载**（控制面板或 `unins000.exe /VERYSILENT`）：删除安装目录 + 撤销 Run 自启 + 移除桌面快捷方式 +
 只删"安装清单里出现过、且 startup 同名"的插件文件——他人文件与用户数据（settings/license/runs/workspace）一律不动。
 
 ### 首次使用
 
 1. **授权激活**：产品方用 `licensing/` KeyGen 按客户机指纹签发 `.lic`（一 Key 一机、首激活锁机）；
    放到 `%LOCALAPPDATA%\NXAssistant\license.lic`，或托盘主页"导入授权 Key"。过期/篡改一律 `LICENSE_INVALID`。
-2. **托盘主页**：**左键单击**托盘图标打开主页（右键仍是快捷菜单）。三个分页：
+2. **托盘主页**：托盘启动（开机自启、桌面快捷方式、安装完立即启动）会先自动打开主页；
+   之后**左键单击**托盘图标再次打开（右键仍是快捷菜单）。三个分页：
    "状态与操作"（授权/NX 连接/MCP/审图四态 + 复制 MCP 配置 + 打开日志与报告目录 + 路径设置）、
    "审图工作台"、"规则管理"。主页右上角关闭=收回托盘，审图任务继续跑；"退出"才终止托盘
    （并带走它自己的宿主进程）。

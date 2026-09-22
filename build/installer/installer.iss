@@ -48,7 +48,11 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; \
   Flags: uninsdeletevalue
 
 [Tasks]
+Name: "desktopicon"; Description: "创建桌面快捷方式（双击即开主页）"
 Name: "deployplugin"; Description: "把 NX 插件合并部署进 %UGII_USER_DIR%\startup（只复制、不删他人文件；需重启 NX 生效）"; Check: UgiiDirExists
+
+[Icons]
+Name: "{autodesktop}\NX 小助手"; Filename: "{app}\tray\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\tray\{#MyAppExeName}"; Description: "启动 NX 小助手托盘"; Flags: postinstall nowait skipifsilent

@@ -41,6 +41,9 @@ internal sealed class McpHostClient : IDisposable
                 FileName = _exe,
                 WorkingDirectory = Path.GetDirectoryName(_exe) ?? ".",
                 UseShellExecute = false,
+                // 宿主是 console 子系统 exe；不设这条，GUI 父进程拉起它时 Windows 会
+                // 另开一个空白控制台窗口（stdio 已重定向，里面永远是空的）。
+                CreateNoWindow = true,
                 RedirectStandardInput = true,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,

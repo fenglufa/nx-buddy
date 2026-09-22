@@ -41,7 +41,8 @@ def main():
     tools = json.loads(readline())["result"]["tools"]
     names = sorted(t["name"] for t in tools)
     print("tools/list:", names)
-    expected = {"ping", "license_status"}
+    expected = {"ping", "license_status", "get_part_summary",
+                "inspect_work_part_geometry", "save_work_part", "create_part"}
     missing = expected - set(names)
     assert not missing, f"missing tools: {missing}"
     for t in tools:

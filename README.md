@@ -43,16 +43,17 @@ stdio 冒烟通过（`tools/list` 暴露 `ping`、`license_status`）。
 **规则引擎批次**：`NxAssistant.Rules` 加载 company_v3 主包 + 华恒子包（合并 28 条规则），消费"证据"模型产出 findings（standard/severity/enforcement/建议/占位标记）；
 写前拦截与审图共用；金样 `dotnet run --project tests/NxAssistant.Rules.Tests`（含 φ13.2→FAIL+建议 13/14）全绿。
 **测试样件**：`test/drawings/` 用 NX 2412 实机造出 5 个 `.prt` 金样（合规板、φ13.2 违规、4×重复孔、华恒销轴/传感器、空图），附预期 findings 对照表，保留不删。
+**读/写工具批次（第一片）**：插件侧 `MainThread`（隐藏 WinForms Control 把 NXOpen 调用 marshal 回主线程）、`AssemblyResolve` 钩子（让 ugraf AppDomain 解析同目录依赖）、工作区沙箱 `Workspace`；已接线 5 方法：`ping`/`get_part_summary`/`inspect_work_part_geometry`/`save_work_part`/`create_part`（后者受 `LICENSE_INVALID` 闸门保护）；`build/deploy_plugin.ps1` 复制产物到 startup（不删既有 DLL）。
 
 待办（按 `tool-migration-v1.md` §5 分批）：
-- 读/写工具批次：移植 §9.1 各 `_op_` 到 C#（含写后回读护栏、stable_id、表达式字符串通道）。
+- 读/写工具批次（续）：部署插件 + 重启 NX 实机联调本切片；再补 rebuild/inspect_feature/topology/stable_id 与写操作（create_block/extrude/hole…含写前规则守卫）。
 - 审图长任务：`review_folder`/`review_status`/`review_findings`（run_id 状态机 + xlsx 报告，xlsx 用 ClosedXML）；把规则引擎接上 NX 证据抽取，用 `test/drawings` 验收。
 - 工程图类样件（图框/标题栏/图层）：待客户确认真实图框 id 后补 2D 图纸样件。
 
 ## 已知约束 / 红线
 
 - stdio 传输：stdout 只走 JSON-RPC，诊断一律进 stderr/文件（已在宿主 `ClearProviders`）。
-- **插件线程亲和**：骨架阶段管道在请求线程内直接调 NXOpen；接线 NX 联调前必须改为 marshal 到 NX 主线程
-  （NXOpen 对主线程有亲和性）。见 `NxPlugin/PipeServer.cs` `// THREADING`。
+- **插件线程亲和**：NXOpen 对主线程有亲和性。管道 worker 只做收发，所有 handler 经 `NxPlugin/MainThread.cs` 的
+  隐藏 WinForms Control `BeginInvoke` marshal 回 NX 主线程执行（超时 120s 明确报错，不盲目重试）。
 - 部署插件进 `%UGII_USER_DIR%\startup`：客户已确认旧 NX-MCP 桥可删除、无需共存；但这一步需重启 NX，改动正在运行的 NX 前先确认。
 - 目标框架锁定 NX 2412；占位规则数值不得写死进 C#。

@@ -24,5 +24,5 @@ New-Item -ItemType Directory -Force -Path $dist | Out-Null
 Write-Host ""
 Write-Host "Done." -ForegroundColor Green
 Write-Host "  MCP host   : $(Join-Path $dist 'mcp\NxAssistant.Mcp.exe')"
-Write-Host "  NX plugin  : $(Join-Path $dist 'nx_plugin\NxAssistant.NxPlugin.dll')"
+Write-Host "  NX plugin  : $(Join-Path $dist 'nx_plugin\NxAssistant_NxPlugin.dll')"
 Write-Host "  smoke test : python build/smoke_stdio.py '$(Join-Path $dist 'mcp\NxAssistant.Mcp.exe')'"

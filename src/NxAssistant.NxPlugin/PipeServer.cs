@@ -13,8 +13,8 @@ namespace NxAssistant.NxPlugin;
 /// 命名管道服务端：常驻 NX 进程内，接收宿主转发的一行一请求（{id,method,params}），
 /// 交给 ToolService 分发，回写一行响应信封。仅本机命名管道（PRD §6 IPC 约束）。
 ///
-/// THREADING: 骨架阶段在请求线程内直接调用 NXOpen。NXOpen 对主线程有亲和性，
-/// 接线批次（部署+重启 NX 联调时）必须改为 marshal 到 NX 主线程执行（见 ToolService 注释）。
+/// 线程模型：worker 线程只做收发；NXOpen 调用由 ToolService.Dispatch 内部
+/// 经 MainThread.Run marshal 回 NX 主线程执行。
 /// </summary>
 internal sealed class PipeServer
 {

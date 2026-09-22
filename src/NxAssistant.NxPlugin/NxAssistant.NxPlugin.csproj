@@ -5,7 +5,7 @@
     <TargetFramework>net48</TargetFramework>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
-    <AssemblyName>NxAssistant.NxPlugin</AssemblyName>
+    <AssemblyName>NxAssistant_NxPlugin</AssemblyName>
     <RootNamespace>NxAssistant.NxPlugin</RootNamespace>
     <!-- 本机未预装 net48 targeting pack，靠此包在无 VS 的机器上编译。 -->
     <AutomaticImplicitImports>false</AutomaticImplicitImports>
@@ -29,7 +29,13 @@
       <HintPath>$(NxManaged)\NXOpen.Utilities.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="NXOpen.UF">
+      <HintPath>$(NxManaged)\NXOpen.UF.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="System.Runtime.Remoting" />
+    <!-- 主线程派发用隐藏 Control 的消息循环（ugraf 主线程本身泵消息）。 -->
+    <Reference Include="System.Windows.Forms" />
   </ItemGroup>
 
   <ItemGroup>

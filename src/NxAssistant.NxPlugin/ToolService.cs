@@ -40,6 +40,7 @@ internal static partial class ToolService
             case MethodNames.CreateCylindricalHole: return CreateCylindricalHole(p);
             case MethodNames.FilletEdges: return FilletEdges(p);
             case MethodNames.ChamferEdges: return ChamferEdges(p);
+            case MethodNames.MoveObject: return MoveObject(p);
             default:
                 throw new NotSupportedException($"unknown method: '{method}' (not implemented yet)");
         }

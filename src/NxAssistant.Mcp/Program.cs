@@ -337,6 +337,31 @@ public sealed class NxTools
         }, ct);
     }
 
+    [McpServerTool(Name = "move_object")]
+    [Description("用 NX Move Body 特征平移工作部件中的实体：translation=[dx,dy,dz] 毫米（非零向量）。提交后按包围盒回读实际位移，与请求不一致（如对 extrude 等特征驱动实体 '提交成功但没动'）会自动回滚并报错提示改编辑特征参数——假成功被护栏消灭。成功响应含移动前后包围盒。失败自动回滚。需有效授权。")]
+    public Task<JsonElement> MoveObject(
+        JsonElement translation,
+        int body_index = 0,
+        string? feature_name = null,
+        CancellationToken ct = default)
+    {
+        return Guard(() =>
+        {
+            _license.EnsureValid("move_object");
+            if (translation.ValueKind != JsonValueKind.Array || translation.GetArrayLength() != 3)
+                throw new ArgumentException("translation must contain exactly three coordinates");
+            if (translation.EnumerateArray().All(v => v.GetDouble() == 0))
+                throw new ArgumentException("translation must not be the zero vector");
+            var p = new Dictionary<string, object?>
+            {
+                ["translation"] = translation,
+                ["body_index"] = body_index,
+            };
+            if (feature_name != null) p["feature_name"] = feature_name;
+            return _plugin.CallAsync(MethodNames.MoveObject, p, ct);
+        }, ct);
+    }
+
     /// warn 级规则告警随成功响应附带返回（不改变 ok 语义，不拦截写入）。
     private static JsonElement AttachRuleWarnings(JsonElement result, IReadOnlyList<NxAssistant.Rules.Finding> warnings)
     {

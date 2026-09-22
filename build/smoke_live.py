@@ -154,7 +154,9 @@ def main():
     print("B0 license_status licensed =", ls.get("licensed"), "state =", ls.get("state"))
     assert ls.get("licensed"), ls
 
-    name = os.environ.get("NXA_LIVE_PART", "NXA_LIVE_smoke1")
+    # create_part 遇同名文件会拒绝（existsFail），所有新建件统一带时间戳后缀保证可重复运行。
+    sfx = str(int(time.time()))
+    name = os.environ.get("NXA_LIVE_PART", f"NXA_LIVE_smoke1_{sfx}")
     c2 = payload(h2.call("create_part", {"file_name": name, "units": "millimeters"}))
     print("B1 create_part ->", json.dumps(c2, ensure_ascii=False))
     assert c2.get("ok"), c2
@@ -242,7 +244,6 @@ def main():
 
     # ---- 阶段 F：fillet/chamfer + FEAT-FILLET-002 warn 守卫 ----
     # 每步用独立的全新"简单块"样件，避免前一步特征改变拓扑后 edge index 漂移干扰断言。
-    sfx = str(int(time.time()))
 
     def fresh_block(name):
         cp = payload(h2.call("create_part", {"file_name": name, "units": "millimeters"}))
@@ -281,6 +282,58 @@ def main():
     f4 = payload(h2.call("save_work_part"))
     assert f4.get("file_exists"), f4
     print("F3 chamfer d=2 + rebuild 0 错 ->", f3["name"], "; F4 save ->", f4["file_size"], "bytes")
+
+    # ---- 阶段 G：move_object 包围盒位移回读护栏（§5 #20 教科书样板） ----
+    # 实机结论：block/extrude 均为特征驱动实体，Move Body "提交成功但没动"，
+    # 护栏必须回滚且实体包围盒分毫不变。真移动的正路径等非特征实体来源
+    # （import_exchange STEP 导入件）到位后补测。
+    g0 = payload(h2.call("move_object", {"translation": [0.0, 0.0, 0.0]}))
+    assert g0.get("ok") is not True and "zero" in json.dumps(g0), g0
+    print("G0 零向量 translation 宿主侧直接拒绝 ->", g0["error"][:60])
+
+    def rollback_guard(tag):
+        before = payload(h2.call("inspect_work_part_geometry"))
+        mv = payload(h2.call("move_object", {"translation": [10.0, 0.0, 5.0]}))
+        after = payload(h2.call("inspect_work_part_geometry"))
+        assert mv.get("ok") is not True, mv
+        txt = json.dumps(mv, ensure_ascii=False)
+        assert "rolled back" in txt or "did not move" in txt or "rejected" in txt, mv
+        b0 = before["bodies"][0]["bounds"]["max"]
+        a0 = after["bodies"][0]["bounds"]["max"]
+        assert all(abs(b0[i] - a0[i]) < 1e-6 for i in range(3)), (before, after, mv)
+        rb = payload(h2.call("rebuild_work_part"))
+        assert rb.get("ok") is True and rb.get("update_error_count") == 0, rb
+        sv = payload(h2.call("save_work_part"))
+        assert sv.get("file_exists"), sv
+        print(f"{tag} 移动被回滚 ->", mv["error"][:110], "... | 包围盒不变, rebuild 0 错, save ok")
+
+    fresh_block(f"NXA_LIVE_moveblk_{sfx}")
+    rollback_guard("G1 block(特征驱动)")
+
+    gp = payload(h2.call("create_part", {"file_name": f"NXA_LIVE_movepad_{sfx}", "units": "millimeters"}))
+    assert gp.get("ok"), gp
+    sk = payload(h2.call("create_parametric_sketch", {
+        "name": "MCP_MOVESK", "plane": "XY",
+        "geometry": [{"type": "rectangle", "name": "R0", "origin": [-20, -10], "width": 40, "height": 20}],
+        "dimensions": [{"type": "horizontal", "geometry": "R0_0", "value": 40.0, "name": "WIDTH"}],
+    }))
+    assert sk.get("ok"), sk
+    pad = payload(h2.call("extrude_sketch", {
+        "sketch_id": sk["journal_id"], "distance": 15, "direction": [0, 0, 1], "feature_name": "MCP_MOVEPAD",
+    }))
+    assert pad.get("ok"), pad
+    mv2 = payload(h2.call("move_object", {"translation": [0.0, 0.0, 30.0]}))
+    after2 = payload(h2.call("inspect_work_part_geometry"))
+    if mv2.get("ok"):
+        print("G2 实测：extrude 实体真的被移动了（NX 行为更新，回滚分支留作保险）->", mv2["name"])
+        d2z = after2["bodies"][0]["bounds"]["max"][2] - 15.0
+        assert abs(d2z - 30.0) <= 1e-3, (d2z, after2)
+    else:
+        txt2 = json.dumps(mv2, ensure_ascii=False)
+        assert "rolled back" in txt2 or "did not move" in txt2 or "rejected" in txt2, mv2
+        rb2 = payload(h2.call("rebuild_work_part"))
+        assert rb2.get("ok") is True and rb2.get("update_error_count") == 0, rb2
+        print("G2 extrude 实体移动被回滚 ->", mv2["error"][:110], "... | rebuild 0 错")
     h2.close()
     print(f"SMOKE LIVE PASS (pid={pid}, part={c2.get('full_path')})")
     return 0

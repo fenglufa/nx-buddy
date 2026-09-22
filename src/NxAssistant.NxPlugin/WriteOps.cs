@@ -216,6 +216,97 @@ internal static partial class ToolService
         }
     }
 
+    // ---- move_object（§5 #20 回读护栏教科书样板：提交后按包围盒位移回读，
+    //      与请求 translation 不一致就 UndoToMark 回滚——Move Body 对特征驱动实体
+    //      （extrude 等）可能"提交成功但没动"，静默假成功比报错更危险） ----
+
+    private static object MoveObject(JsonElement p)
+    {
+        var work = Work();
+        var session = Session.GetSession();
+        var body = BodyByIndex(work, (int)FiniteNum(p, "body_index", 0));
+        var translation = Vec3(p, "translation", null!)
+            ?? throw new ArgumentException("translation is required");
+        if (Math.Sqrt(translation.Sum(v => v * v)) <= 1e-9)
+            throw new ArgumentException("translation must not be the zero vector");
+        var featureName = SafeObjectName(OptString(p, "feature_name") ?? string.Empty, "MCP_MOVE_OBJECT");
+        var boundsBefore = BodyBounds(body);
+
+        var mark = session.SetUndoMark(Session.MarkVisibility.Visible, "NXA move object");
+        NXOpen.Features.MoveBodyBuilder builder = null;
+        try
+        {
+            builder = work.Features.CreateMoveBodyBuilder(null!);
+            var rule = work.ScRuleFactory.CreateRuleBodyDumb(new NXOpen.Body[] { body });
+            builder.BodyToMove.ReplaceRules(new NXOpen.SelectionIntentRule[] { rule }, false);
+            builder.Motion.Option = NXOpen.GeometricUtilities.ModlMotion.Options.DeltaXyz;
+            builder.Motion.DeltaXc.RightHandSide = FmtNum(translation[0]);
+            builder.Motion.DeltaYc.RightHandSide = FmtNum(translation[1]);
+            builder.Motion.DeltaZc.RightHandSide = FmtNum(translation[2]);
+            if (!builder.Validate())
+                throw new InvalidOperationException("NX rejected the move parameters");
+            var feature = builder.CommitFeature();
+            feature.SetName(featureName);
+            session.UpdateManager.DoUpdate(
+                session.SetUndoMark(Session.MarkVisibility.Visible, "NXA move object regen"));
+            session.SetUndoMarkName(mark, "NXA move object");
+            var name = feature.Name;
+            var journalId = feature.JournalIdentifier;
+            var boundsAfter = BodyBounds(body);
+            if (boundsBefore == null || boundsAfter == null)
+            {
+                try { session.UndoToMark(mark, null); } catch { /* 尽力回滚 */ }
+                throw new InvalidOperationException("move object aborted: NX returned no bounding box");
+            }
+            var displacement = Enumerable.Range(0, 3)
+                .Select(axis => boundsAfter[axis] - boundsBefore[axis]).ToArray();
+            if (Enumerable.Range(0, 3).Any(axis => Math.Abs(displacement[axis] - translation[axis]) > 1e-3))
+            {
+                try { session.UndoToMark(mark, null); } catch { /* 尽力回滚 */ }
+                throw new InvalidOperationException(
+                    $"move object rolled back: NX committed the feature but the body did not move " +
+                    $"(displacement was [{FmtNum(displacement[0])}, {FmtNum(displacement[1])}, {FmtNum(displacement[2])}], " +
+                    $"requested [{FmtNum(translation[0])}, {FmtNum(translation[1])}, {FmtNum(translation[2])}]). " +
+                    "Move Body cannot reposition feature-driven bodies such as extrusions; " +
+                    "edit the owning feature parameters instead.");
+            }
+            return new Dictionary<string, object?>
+            {
+                ["ok"] = true,
+                ["name"] = name,
+                ["journal_id"] = journalId,
+                ["body_index"] = (int)FiniteNum(p, "body_index", 0),
+                ["body_journal_id"] = body.JournalIdentifier,
+                ["translation"] = translation.ToList(),
+                ["bounds_before"] = BoundsDict(boundsBefore),
+                ["bounds_after"] = BoundsDict(boundsAfter),
+                ["part_body_count"] = CountBodies(work),
+            };
+        }
+        catch
+        {
+            try { session.UndoToMark(mark, null); } catch { /* 尽力回滚 */ }
+            throw;
+        }
+        finally
+        {
+            try { builder?.Destroy(); } catch { /* ignore */ }
+        }
+    }
+
+    /// <summary>镜像 _body_bounding_box：UF 包围盒 [min3,max3]，取不到返回 null（触发回滚路径）。</summary>
+    private static double[]? BodyBounds(Body body)
+    {
+        try { return AskBoundingBox(NXOpen.UF.UFSession.GetUFSession(), body); }
+        catch { return null; }
+    }
+
+    private static Dictionary<string, object?> BoundsDict(double[] box) => new()
+    {
+        ["min"] = box.Take(3).ToList(),
+        ["max"] = box.Skip(3).Take(3).ToList(),
+    };
+
     /// <summary>镜像 _items_by_indices：非空 int 数组、越界与重复都报错，按 body.GetEdges() 顺序取边。</summary>
     private static NXOpen.Edge[] EdgesByIndices(Body body, JsonElement p)
     {

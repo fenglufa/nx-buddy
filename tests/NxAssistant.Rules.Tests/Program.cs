@@ -144,6 +144,61 @@ var all = RuleEngine.Evaluate(pack, evD);
 Check("Blocking 过滤正确", all.Count >= RuleEngine.Blocking(pack, evD).Count
     && RuleEngine.Blocking(pack, evD).All(f => f.IsBlocking));
 
+// ===================== 第十三片：用户态覆盖层 rules_state =====================
+
+// 1) 禁用规则：HOLE-DIA-001 关掉后 φ13.2 不再阻断，其他规则照旧
+var st = new RulesState();
+st.SetDisabled("HOLE-DIA-001", "光孔直径必须属于标准系列", true);
+var packOff = RulePack.Load(packDir, st);
+Check("覆盖层规则数 -1", packOff.Rules.Count == pack.Rules.Count - 1);
+Check("禁用后 φ13.2 不再报 HOLE-DIA-001",
+    !RuleEngine.Evaluate(packOff, ev1).Any(f => f.RuleId == "HOLE-DIA-001"));
+Check("禁用不影响其他规则（螺纹 M14 仍阻断）",
+    RuleEngine.Blocking(packOff, evM).Any(f => f.RuleId == "HOLE-THD-003"));
+
+// 2) 参数替换：hole_series 增加 13.2 → φ13.2 放行（整文件替换语义）
+var st2 = new RulesState();
+var hsNode = System.Text.Json.Nodes.JsonNode.Parse(
+    File.ReadAllText(Path.Combine(packDir, "hole_series.json"))!).AsObject();
+hsNode["simple_through_holes"]!.AsArray().Add(13.2);
+st2.SetDataOverride("hole_series.json", "hole_series.json 系列加入 13.2",
+    System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(hsNode.ToJsonString()));
+var packOn = RulePack.Load(packDir, st2);
+Check("改参后 φ13.2 进系列放行",
+    !RuleEngine.Evaluate(packOn, ev1).Any(f => f.RuleId == "HOLE-DIA-001"));
+Check("改参不影响其他直径判定（φ11 仍合规）",
+    !RuleEngine.Evaluate(packOn, new Evidence { Part = new PartEvidence { Holes = { Hole(11, "simple_through") } } })
+        .Any(f => f.RuleId == "HOLE-DIA-001"));
+
+// 3) 圆角系列已数据化（fillet_series.json）：加入 2.2 后不再告警
+var st3 = new RulesState();
+var fsNode = System.Text.Json.Nodes.JsonNode.Parse(
+    File.ReadAllText(Path.Combine(packDir, "fillet_series.json"))!).AsObject();
+fsNode["radius_series"]!.AsArray().Add(2.2);
+st3.SetDataOverride("fillet_series.json", "fillet_series.json 系列加入 2.2",
+    System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(fsNode.ToJsonString()));
+var packFs = RulePack.Load(packDir, st3);
+Check("圆角系列改参生效（2.2 不再告警）",
+    !RuleEngine.Evaluate(packFs, evM).Any(f => f.RuleId == "FEAT-FILLET-002"));
+
+// 4) 落盘往返 + 变更留痕（禁用与改参都要能在日志里回答"谁关的/改了什么"）
+var statePath = Path.Combine(Path.GetTempPath(), "nxa_rules_test_" + Guid.NewGuid().ToString("N") + ".json");
+try
+{
+    st2.Save(statePath);
+    var back = RulesState.Load(statePath);
+    Check("覆盖层保存/重载一致",
+        back.TryDataOverride("hole_series.json", out _) &&
+        System.Text.Json.JsonSerializer.Serialize(back.Data) ==
+            System.Text.Json.JsonSerializer.Serialize(st2.Data));
+    Check("改参留痕", back.Log.Any(e => e.Action == "data_override" && e.Detail.Contains("13.2")));
+    st.Save(statePath);
+    var backOff = RulesState.Load(statePath);
+    Check("禁用留痕 + 重载认账",
+        backOff.IsDisabled("HOLE-DIA-001") && backOff.Log.Any(e => e.Action == "disable"));
+}
+finally { File.Delete(statePath); }
+
 Console.WriteLine(failed == 0 ? "\nRULES TESTS PASS" : $"\n{failed} RULES TESTS FAILED");
 return failed == 0 ? 0 : 1;
 

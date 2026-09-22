@@ -15,6 +15,7 @@
   <ItemGroup>
     <ProjectReference Include="..\NxAssistant.Core\NxAssistant.Core.csproj" />
     <ProjectReference Include="..\NxAssistant.Licensing\NxAssistant.Licensing.csproj" />
+    <ProjectReference Include="..\NxAssistant.Rules\NxAssistant.Rules.csproj" />
   </ItemGroup>
 
 </Project>

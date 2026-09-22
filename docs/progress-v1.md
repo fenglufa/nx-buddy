@@ -26,6 +26,7 @@
 | 第十一片 | 托盘 NxAssistant.exe + NxaSettings 共享配置层 | cbca953 |
 | 第十二片 | 脚本安装器 install/uninstall + 端到端冒烟 | 86ac0c2 |
 | 第十二片续 | Inno Setup 壳 installer.iss + 静默装卸冒烟 | ca4047c |
+| 第十三片 | 规则可见与可管理：rules_state 覆盖层 + 托盘规则管理分页 | 本批 |
 
 ## 批次详记
 
@@ -54,7 +55,29 @@ stdio 冒烟通过（`tools/list` 暴露 `ping`、`license_status`）。
 
 **Inno Setup 壳（第十二片续）**：选型定案 Inno（用户级免 UAC 与脚本安装器同口径；MSIX 虚拟文件系统与"NX 从真实 startup 加载 DLL"根本冲突，Squirrel 面向 Electron 自动更新，真 MSI 仅在客户 IT 强要求时走 WiX 迁移）。`build/installer/installer.iss` 只做"双击体验 + 卸载登记"，**业务逻辑零重实现**：三组件+规则包由 `[Files]` 落位（与 install.ps1 同布局），HKCU Run 走 `[Registry]`（`uninsdeletevalue` 自动撤销），startup 部署挂 `[Tasks] deployplugin`（`Check: UgiiDirExists`），安装后由 `[Code] CurStepChanged` 调**随装的** `deploy_plugin.ps1`（合并语义原样复用）；卸载由 `CurUninstallStepChanged` 按 `{app}\nx_plugin` 的 DLL 名单**逐个对名删** startup 同名文件——清单外文件（他人插件）绝不触碰。`build/make_installer.ps1` 自动定位 ISCC（Program Files 或 winget 用户目录），预留 `-Pfx` 签名钩子（证书采购后启用）。**实机端到端冒烟**（`build/smoke_iss.py`：编出 `dist\installer\NXAssistant-Setup-1.0.0.exe`→`/VERYSILENT /TASKS=deployplugin` 装进临时目录→11 个插件 DLL+规则包落位、Run 值精确、假 startup 部署且预埋的第三方 DLL 未动→安装态托盘 `rules_dir` 命中随装包→`unins000 /VERYSILENT` 目录/Run 值/同名 startup DLL 全清、**第三方 DLL 存活**）。
 
+**规则可见与可管理批次（第十三片）**：补用户反馈的两个缺口——规则"看不见、改不了"。设计定为**两层模型**：
+`docs/company_v3` 基线包**只读**（升级整目录替换，用户改动绝不写回），用户态改动落在
+`%LOCALAPPDATA%\NXAssistant\rules_state.json` **覆盖层**（env `NXA_RULES_STATE` > settings.json `rules_state_path` > 默认），
+结构为 `{disabled:[rule_id], data:{"rel/path.json":<整文件替换>}, log:[{t,action,detail}]}`。
+叠加钩子打在 `RulePack.Load(rootDir, state)`（规则清单过滤 + `Data()` 按相对路径拦截替换），
+因此**写前守卫与审图零改动共享同一份用户态**；`HostRules.LoadPack` 每次解析都复查包目录与覆盖层文件的
+mtime，托盘保存后宿主**下一次受守卫写/审图即生效，无需重启**；fail-closed 语义不变（基线包缺失仍全拦，
+"禁用"≠"删除"，升级包后新规则默认启用）。`RuleDataFiles` 映射 rule_id→数据文件供 UI 反查；
+FEAT-FILLET-002 的圆角系列从 C# 硬编码移入 `fillet_series.json`（兑现"占位数值不写死"红线并让用户可改）。
+托盘"设置 → 规则管理"分页：全规则表格（启用勾选/编号/组/名称/级别/用户改动标记）+ 每规则"改参数"对话框
+（纯数值/字符串数组按逗号列表编辑，其余字段原样保留，整文件替换语义）+ 保存/重置 + 最近 15 条变更日志
+（回答签核报告"这条规则被谁停的"）。`--status-json` 新增 `rules_state_path/rules_disabled_count/rules_overrides_count/rules_state_latest`。
+**离线全绿**（规则金样新增 9 用例：禁用后 φ13.2 不报且螺纹仍拦、改参进系列放行、圆角改参、保存/重载、三类留痕；
+`smoke_stdio.py` T4a/T4b：同进程内 φ13.2 被拦→写覆盖层禁用→即时放行到插件阶段（`target_body_index=999` 防呆，
+真机 NX 在跑也绝不会真钻孔）；`smoke_tray.py` T4 覆盖层探测；安装态回归：`smoke_installer`（含随装包）与
+`smoke_iss` 静默装卸全绿）。V1 权限口径（2026-09-22 用户定）：自由改 + 全程留痕，不做审批链。
+
 待办（按 `tool-migration-v1.md` §5 分批）：
+- 审图工作台（第十四片，2026-09-22 用户定批次顺序"先规则再审图"）：托盘做 MCP **客户端**（stdio 拉起宿主），
+  设置窗加"审图"分页——选沙箱目录→`review_folder` 发起→进度/取消/续跑→findings 表→打开 xlsx，
+  与 Agent 走完全同一套工具（一份授权闸门/守卫/run 状态机）；同批确定托盘左键主页形态。
+- 规则"新增"入口：第十三片覆盖层兑现了启停/改参；全新判定逻辑属引擎扩展（随版本），纯阈值/系列差异
+  引导用户走"复制 company_v3 改 JSON + `rules_dir` 指向"路线（README 已写明）。
 - 读/写工具批次（续）：`shell_body`/`mirror_feature` 等按需排期（`import_exchange` 已随第八片落地，见上）。
 - 工程图类样件与校准（待客户）：真实图框 id、图层名反查通道、标题栏字段别名、焊缝/BOM 行文本、圆形孔组 PCD 容差、板厚启发在异形件上的替代口径——客户 2D 图纸样件到位后把第十片各负路径/占位逐项转正。
 - 规则占位表（待客户数据）：FLANGE-PCD/STEEL/WELD/BOM/EDGE-SAFE 的数值表目前为 placeholder，命中即标 `placeholder:true`。

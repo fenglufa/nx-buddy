@@ -13,6 +13,9 @@
   读回与抽取（部件摘要/拓扑/特征/草图/图层/工程图注释/标题栏/板厚/孔组等）。
 - **写前守卫**：每一次受守卫的写操作在**转发给 NX 之前**先过规则引擎——
   不合规尺寸直接拒绝并给出邻近标准值建议（如 φ13.2 → 建议 13/14）；规则包缺失时 fail-closed。
+- **规则用户态覆盖层**：内置 company_v3 规则包是只读基线（升级整目录替换），用户的启停/改参
+  写进 `%LOCALAPPDATA%\NXAssistant\rules_state.json` 覆盖层，带完整变更日志；
+  托盘"设置 → 规则管理"分页可视化操作，保存后宿主下一次守卫/审图即生效（无需重启）。
 - **审图长任务**：`review_folder` 批量逐张判定，产出 `审图报告.xlsx` + 机器可读 `summary.json`，
   支持中断续跑/取消，全程不扰动用户当前工作部件。
 - **可回退**：`undo_last_assistant_change` 用"具名 undo mark + 模型指纹"双校验，绝不误撤用户自己的操作。
@@ -32,7 +35,7 @@ NxAssistant.exe 托盘 ─┘（只读状态探测 + 设置窗，与宿主分离
 |---|---|---|---|
 | `src/NxAssistant.Mcp` | `NxAssistant.Mcp.exe` | net8 | MCP 宿主：参数校验 / 授权闸门 / 规则引擎 / 审图编排 / 报告，经 IPC 调插件 |
 | `src/NxAssistant.NxPlugin` | `NxAssistant_NxPlugin.dll` | **net48** | 唯一直接调用 NXOpen 的层，随 NX 从 `%UGII_USER_DIR%\startup` 加载；NXOpen 是 .NET Framework 4.8 程序集，必须跑在 ugraf.exe 进程内 |
-| `src/NxAssistant.Tray` | `NxAssistant.exe` | net8-windows | 托盘 + 设置窗（PRD §6）：授权/NX 连接/MCP 在跑/审图忙碌四态，`--status-json` 无头采集 |
+| `src/NxAssistant.Tray` | `NxAssistant.exe` | net8-windows | 托盘 + 设置窗（PRD §6）：授权/NX 连接/MCP 在跑/审图忙碌四态，规则管理分页，`--status-json` 无头采集 |
 | `src/NxAssistant.Core` | 类库 | netstandard2.0 | IPC 契约 + `NxaSettings` 统一路径解析（下见） |
 | `src/NxAssistant.Licensing` / `Rules` | 类库 | netstandard2.0 | ECDSA-P256 离线验签 / company_v3 规则引擎 |
 | `licensing/` | `nxa-keygen` | — | 签发工具（仅产品方持有，私钥不进客户包） |
@@ -41,7 +44,7 @@ NxAssistant.exe 托盘 ─┘（只读状态探测 + 设置窗，与宿主分离
 
 ```
 环境变量  >  %LOCALAPPDATA%\NXAssistant\settings.json  >  默认值
-NXA_IPC_TOKEN(token 不共享)   NXA_WORKSPACE(workspace)   NXA_RULES_DIR(rules_dir)   NXA_LICENSE_PATH(license_path)
+NXA_IPC_TOKEN(token 不共享)   NXA_WORKSPACE(workspace)   NXA_RULES_DIR(rules_dir)   NXA_LICENSE_PATH(license_path)   NXA_RULES_STATE(rules_state_path)
 ```
 
 `settings.json` 由托盘"设置"分页写入，宿主/插件下次解析即重读（热改）。
@@ -105,7 +108,7 @@ pwsh build/installer/uninstall.ps1     # 按 install.json 清单卸载；-Remove
 ├─ nx_plugin\  插件 DLL（startup 部署的名单来源）
 └─ installer\  install/uninstall/deploy_plugin.ps1 随装副本（脱离仓库可维护）
 %UGII_USER_DIR%\startup\               插件 DLL 合并复制（不删他人文件）
-%LOCALAPPDATA%\NXAssistant\            用户数据：settings.json / license.lic / runs\ / workspace\
+%LOCALAPPDATA%\NXAssistant\            用户数据：settings.json / license.lic / rules_state.json / runs\ / workspace\
 ```
 
 **卸载**（控制面板或 `unins000.exe /VERYSILENT`）：删除安装目录 + 撤销 Run 自启 +
@@ -122,14 +125,21 @@ pwsh build/installer/uninstall.ps1     # 按 install.json 清单卸载；-Remove
    ```
 
 3. **验证**：对 Agent 说"在 NX 里建一个 40×25 的块"或看托盘四态——NX 连接一栏变绿即链路通。
+4. **规则管理**（托盘 → 设置 → "规则管理"分页）：表格列出规则包全部规则（编号/组/名称/级别），
+   勾选即启用/禁用，"改参数"编辑规则引用的标准系列数据（如孔系列、圆角系列），保存写入用户态
+   覆盖层并留变更日志（谁在何时禁了哪条），宿主下一次守卫/审图即生效；"重置"清空全部覆盖回到
+   基线。**禁用 ≠ 删除**：升级规则包后新规则默认启用；整包不可用仍 fail-closed。
+   需要整套阈值不同时（如按客户标准另立系列），复制 `docs/company_v3` 改 JSON 后把
+   `rules_dir`（或环境变量 `NXA_RULES_DIR`）指向该目录即可——引擎按 pack.json 装载，
+   全新判定逻辑则需随版本扩展。
 
 ## 验证与冒烟（不改真机状态的自检）
 
 ```powershell
-python build/smoke_stdio.py dist/mcp/NxAssistant.Mcp.exe   # tools/list 齐 33 工具 + schema/描述完整（不需要 NX 在跑）
+python build/smoke_stdio.py dist/mcp/NxAssistant.Mcp.exe   # tools/list 齐 33 工具 + schema/描述完整 + 写前守卫/覆盖层热加载（T4a/T4b，不需要 NX 在跑）
 python build/smoke_license.py <keygen.dll> <host.exe> <私钥> <公钥>   # 授权端到端（签发→锁机→篡改必拒）
-dotnet run --project tests/NxAssistant.Rules.Tests         # 规则引擎离线金样（φ13.2→FAIL+建议 13/14）
-python build/smoke_tray.py                                 # 托盘 --status-json 形状 + settings.json 往返
+dotnet run --project tests/NxAssistant.Rules.Tests         # 规则引擎离线金样（φ13.2→FAIL+建议 13/14）+ 覆盖层九用例
+python build/smoke_tray.py                                 # 托盘 --status-json 形状 + rules_state 覆盖层探测（T4）
 python build/smoke_installer.py                            # 脚本安装器装卸闭环（假 UGII 目录，不碰真机）
 python build/smoke_iss.py                                  # Inno 安装包静默装卸（假 UGII 目录 + 第三方 DLL 存活断言）
 ```
@@ -146,9 +156,11 @@ $env:NXA_LICENSE_PATH="..."; python build/smoke_live.py dist/mcp/NxAssistant.Mcp
 ## 当前状态（2026-09-22）
 
 V1 交付面已全部落地并实机验证：33 工具白名单（第十片齐）、审图长任务（第九片）、
-托盘 + 共享配置层（第十一片）、脚本安装器 + Inno Setup 壳双路径（第十二片）——
+托盘 + 共享配置层（第十一片）、脚本安装器 + Inno Setup 壳双路径（第十二片）、
+规则可见与可管理——用户态覆盖层 + 托盘规则管理分页（第十三片）——
 `smoke_live` A–K 全绿、安装包静默装卸端到端全绿。
 余下工作全部登记在 [`docs/progress-v1.md`](docs/progress-v1.md) 待办节：
+审图工作台（托盘直连宿主，人的发起入口）、
 客户 2D 样件与华恒数值表到位后把占位/负路径转正、代码签名（证书暂缓采购）、
 framework-dependent 发布改自包含或文档化运行时前置、安装向导人工观感验收。
 

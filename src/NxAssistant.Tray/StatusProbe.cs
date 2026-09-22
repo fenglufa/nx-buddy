@@ -27,6 +27,10 @@ public sealed class TrayStatus
     public string WorkspaceRoot { get; set; } = "";
     public string RulesDir { get; set; } = "";
     public bool RulesPackFound { get; set; }
+    public string RulesStatePath { get; set; } = "";
+    public int RulesDisabledCount { get; set; }
+    public int RulesOverridesCount { get; set; }
+    public string RulesStateLatest { get; set; } = "";
     public string SettingsPath { get; set; } = "";
     public string PluginLogPath { get; set; } = "";
     public string RunsRoot { get; set; } = "";
@@ -58,6 +62,9 @@ public static class StatusProbe
         var mcpExe = ResolveMcpExe();
         var (rulesDir, rulesFound) = ResolveRulesPack(mcpExe);
         var localApp = NxaSettings.Dir;
+        var rulesStatePath = NxaSettings.Resolve("NXA_RULES_STATE", "rules_state_path",
+            () => NxAssistant.Rules.RulesState.DefaultPath());
+        var rulesState = NxAssistant.Rules.RulesState.Load(rulesStatePath);
 
         return new TrayStatus
         {
@@ -77,6 +84,12 @@ public static class StatusProbe
                 () => Path.Combine(localApp, "workspace")),
             RulesDir = rulesDir,
             RulesPackFound = rulesFound,
+            RulesStatePath = rulesStatePath,
+            RulesDisabledCount = rulesState.Disabled.Count,
+            RulesOverridesCount = rulesState.Data.Count,
+            RulesStateLatest = rulesState.Log.Count > 0
+                ? $"{rulesState.Log[^1].T} {rulesState.Log[^1].Action} {rulesState.Log[^1].Detail}"
+                : "",
             SettingsPath = NxaSettings.FilePath,
             PluginLogPath = Path.Combine(Path.GetTempPath(), "nxa_plugin.log"),
             RunsRoot = Path.Combine(localApp, "runs"),

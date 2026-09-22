@@ -66,7 +66,7 @@ public static class RuleEngine
             // ---- 草图 / 特征 ----
             case "SKETCH-001": return ExtrudeSketchFinished(r, ev, enf);
             case "FEAT-EXT-001": return ExtrudeDistance(r, ev, enf);
-            case "FEAT-FILLET-002": return FilletRadius(r, ev, enf);
+            case "FEAT-FILLET-002": return FilletRadius(pack, r, ev, enf);
             // ---- 实体 ----
             case "BODY-001": return SolidExists(r, part, enf);
             case "BODY-002": return StraySheetBodies(r, part, enf);
@@ -192,16 +192,20 @@ public static class RuleEngine
         }
     }
 
-    private static IEnumerable<Finding> FilletRadius(RuleDef r, Evidence ev, string enf)
+    private static IEnumerable<Finding> FilletRadius(RulePack pack, RuleDef r, Evidence ev, string enf)
     {
         if (ev.Part == null) yield break;
-        var series = new[] { 0.5, 1.0, 1.5, 2.0, 3.0, 5.0 };
+        // 系列数据在 fillet_series.json（可被用户覆盖层整文件替换）；旧包缺该文件时回落内建值。
+        var series = pack.TryData(r, "fillet_series", out var data)
+            ? Dou(data, "radius_series")
+            : new List<double> { 0.5, 1.0, 1.5, 2.0, 3.0, 5.0 };
         foreach (var f in ev.Part.Fillets)
         {
             if (f.Radius == null) continue;
             if (series.Any(s => Math.Abs(s - f.Radius.Value) < Eps)) continue;
             yield return Make(r, "warn", "圆角特征", Num(f.Radius.Value) + "mm",
-                "圆角半径不在建议系列（0.5/1/1.5/2/3/5）", NearestTwo(series, f.Radius.Value).Select(Num).ToList());
+                "圆角半径不在建议系列（" + string.Join("/", series.Select(Num)) + "）",
+                NearestTwo(series, f.Radius.Value).Select(Num).ToList());
         }
     }
 

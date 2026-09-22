@@ -18,6 +18,12 @@ internal static class HostRules
 {
     private static RulePack? _pack;
     private static string? _packError;
+    private static string _packDir = "";
+    private static DateTime _packStamp;
+
+    /// <summary>用户规则态文件路径：NXA_RULES_STATE &gt; settings.json[rules_state_path] &gt; 默认。</summary>
+    public static string ResolveStatePath() =>
+        NxaSettings.Resolve("NXA_RULES_STATE", "rules_state_path", RulesState.DefaultPath);
 
     /// <summary>孔直径守卫（HOLE-DIA-001 主战场）。返回 null=放行；否则为 RULE_BLOCKED/RULE_PACK_UNAVAILABLE 载荷。</summary>
     public static JsonElement? CheckHoleWrite(double diameter, string kind)
@@ -58,16 +64,23 @@ internal static class HostRules
 
     private static RulePack? LoadPack()
     {
-        if (_pack != null || _packError != null) return _pack;
+        // 第十三片：每次比对 rules_state.json 的 mtime——托盘改了规则，下一次守卫即生效（免重启）。
         try
         {
             var dir = FindPackDir()
                 ?? throw new DirectoryNotFoundException(
                     "找不到 company_v3 规则包目录（可设 NXA_RULES_DIR 或 settings.json 的 rules_dir 指向含 pack.json 的目录）");
-            _pack = RulePack.Load(dir);
+            var statePath = ResolveStatePath();
+            var stamp = File.Exists(statePath) ? File.GetLastWriteTimeUtc(statePath) : default;
+            if (_pack != null && dir == _packDir && stamp == _packStamp) return _pack;
+            _pack = RulePack.Load(dir, RulesState.Load(statePath));
+            _packDir = dir;
+            _packStamp = stamp;
+            _packError = null;
         }
         catch (Exception ex)
         {
+            _pack = null;
             _packError = ex.Message;
         }
         return _pack;

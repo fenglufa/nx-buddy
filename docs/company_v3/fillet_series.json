@@ -1,0 +1,6 @@
+{
+  "standard": "company_v3",
+  "unit": "mm",
+  "radius_series": [0.5, 1.0, 1.5, 2.0, 3.0, 5.0],
+  "notes": "FEAT-FILLET-002 建议系列（warn 级，不阻断）。原内建于引擎，第十三片移入数据文件以支持用户态覆盖"
+}

@@ -402,6 +402,112 @@ internal static partial class ToolService
         return File.Exists(path) ? path : null;
     }
 
+    // ---- import_exchange（§5 追加行：客户 2026-09-22 确认进 V1；STEP→当前工作部件。
+    //      回读护栏是"实体数必须真的变多 + update_error_count"双条件，0 增量即 ok:false；
+    //      非特征实体的入口——move_object 正路径依赖它） ----
+
+    private static object ImportExchange(JsonElement p)
+    {
+        var work = Work();
+        var session = Session.GetSession();
+        var fileName = GetString(p, "file_name");
+        var ext = Path.GetExtension(fileName).ToLowerInvariant();
+        var format = (OptString(p, "format") ?? "auto").ToLowerInvariant();
+        if (format == "auto") format = ext is ".x_t" or ".x_b" ? "parasolid" : "step";
+        if (format != "step")
+            throw new ArgumentException("V1 仅支持 STEP 导入（.stp/.step；Parasolid 待后续批次）");
+        var protocol = (OptString(p, "application_protocol") ?? "ap242").ToLowerInvariant();
+        if (protocol is not ("ap203" or "ap214" or "ap242"))
+            throw new ArgumentException("application_protocol must be ap203, ap214, or ap242");
+        var input = Workspace.ResolveExchange(fileName, new[] { ".stp", ".step" }, overwrite: true);
+        if (!File.Exists(input))
+            throw new IOException("exchange file does not exist: " + input);
+        bool OptBool(string name, bool dflt) =>
+            !p.TryGetProperty(name, out var v) ? dflt
+            : v.ValueKind == JsonValueKind.True || v.ValueKind == JsonValueKind.False ? v.GetBoolean()
+            : throw new ArgumentException(name + " must be a boolean");
+        bool sew = OptBool("sew_surfaces", true), simplify = OptBool("simplify_geometry", true);
+        bool includeCurves = OptBool("include_curves", true);
+        var settingsFile = StepSettingsFile(protocol);
+
+        int bodiesBefore = CountBodies(work), featuresBefore = CountFeatures(work);
+        void Configure(NXOpen.BaseImporter b, NXOpen.ObjectTypeSelector ot)
+        {
+            b.SetMode(NXOpen.BaseImporter.Mode.NativeFileSystem);
+            b.InputFile = input;
+            b.OutputFile = "";
+            b.ProcessHoldFlag = true;
+            ot.Solids = true;
+            ot.Surfaces = true;
+            ot.Curves = includeCurves;
+        }
+        switch (protocol)
+        {
+            case "ap203": {
+                var b = session.DexManager.CreateStep203Importer();
+                try
+                {
+                    b.ImportTo = NXOpen.Step203Importer.ImportToOption.WorkPart;
+                    b.SewSurfaces = sew;
+                    b.SimplifyGeometry = simplify;
+                    if (settingsFile != null) b.SettingsFile = settingsFile;
+                    Configure(b, b.ObjectTypes);
+                    b.Commit();
+                }
+                finally { try { b.Destroy(); } catch { /* ignore */ } }
+                break;
+            }
+            case "ap214": {
+                var b = session.DexManager.CreateStep214Importer();
+                try
+                {
+                    b.ImportTo = NXOpen.Step214Importer.ImportToOption.WorkPart;
+                    b.SewSurfaces = sew;
+                    b.SimplifyGeometry = simplify;
+                    if (settingsFile != null) b.SettingsFile = settingsFile;
+                    Configure(b, b.ObjectTypes);
+                    b.Commit();
+                }
+                finally { try { b.Destroy(); } catch { /* ignore */ } }
+                break;
+            }
+            default: {
+                var b = session.DexManager.CreateStep242Importer();
+                try
+                {
+                    b.ImportTo = NXOpen.Step242Importer.ImportToOption.WorkPart;
+                    b.SewSurfaces = sew;
+                    b.SimplifyGeometry = simplify;
+                    if (settingsFile != null) b.SettingsFile = settingsFile;
+                    Configure(b, b.ObjectTypes);
+                    b.Commit();
+                }
+                finally { try { b.Destroy(); } catch { /* ignore */ } }
+                break;
+            }
+        }
+        var mark = session.SetUndoMark(Session.MarkVisibility.Visible, "NXA import exchange");
+        int updateErrors = session.UpdateManager.DoUpdate(mark);
+        int bodiesAfter = CountBodies(work), featuresAfter = CountFeatures(work);
+        return new Dictionary<string, object?>
+        {
+            ["ok"] = updateErrors == 0 && bodiesAfter > bodiesBefore,
+            ["format"] = format,
+            ["application_protocol"] = protocol,
+            ["part"] = work.Leaf,
+            ["input_file"] = input,
+            ["input_file_size"] = new FileInfo(input).Length,
+            ["settings_file"] = settingsFile,
+            ["body_count_before"] = bodiesBefore,
+            ["body_count_after"] = bodiesAfter,
+            ["body_count_added"] = bodiesAfter - bodiesBefore,
+            ["feature_count_before"] = featuresBefore,
+            ["feature_count_after"] = featuresAfter,
+            ["feature_count_added"] = featuresAfter - featuresBefore,
+            ["update_error_count"] = updateErrors,
+        };
+    }
+
     /// <summary>镜像 _items_by_indices：非空 int 数组、越界与重复都报错，按 body.GetEdges() 顺序取边。</summary>
     private static NXOpen.Edge[] EdgesByIndices(Body body, JsonElement p)
     {
@@ -971,6 +1077,13 @@ internal static partial class ToolService
     {
         int n = 0;
         foreach (Body unused in work.Bodies) n++;
+        return n;
+    }
+
+    private static int CountFeatures(Part work)
+    {
+        int n = 0;
+        foreach (NXOpen.Features.Feature unused in work.Features) n++;
         return n;
     }
 

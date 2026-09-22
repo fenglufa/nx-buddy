@@ -47,7 +47,7 @@ def main():
                 "rebuild_work_part", "create_block", "create_parametric_sketch",
                 "inspect_sketch", "extrude_sketch", "set_feature_expression",
                 "create_cylindrical_hole", "fillet_edges", "chamfer_edges", "move_object",
-                "export_exchange"}
+                "export_exchange", "import_exchange"}
     missing = expected - set(names)
     assert not missing, f"missing tools: {missing}"
     for t in tools:

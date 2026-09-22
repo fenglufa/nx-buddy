@@ -361,6 +361,36 @@ def main():
     ow = payload(h2.call("export_exchange", {"file_name": step_name, "overwrite": True}))
     assert ow.get("ok"), ow
     print("H2 重复导出被拒 / overwrite=true 重导 ok ->", ow["file_size"], "bytes")
+
+    # ---- 阶段 I：import_exchange + move_object 正路径（STEP 往返；导入件为非特征实体） ----
+    miss = payload(h2.call("import_exchange", {"file_name": f"NXA_LIVE_step_{sfx}_nope.stp"}))
+    assert miss.get("ok") is not True and "does not exist" in json.dumps(miss), miss
+    ip = payload(h2.call("create_part", {"file_name": f"NXA_LIVE_imp_{sfx}", "units": "millimeters"}))
+    assert ip.get("ok"), ip
+    imp = payload(h2.call("import_exchange", {"file_name": step_name}))
+    assert imp.get("ok") and imp["body_count_added"] >= 1 and imp["update_error_count"] == 0, imp
+    print("I0 缺文件直拒; I1 STEP 导入 ->", imp["body_count_before"], "->", imp["body_count_after"],
+          "bodies (+", imp["body_count_added"], "), update_errors =", imp["update_error_count"])
+
+    g_before = payload(h2.call("inspect_work_part_geometry"))
+    mv3 = payload(h2.call("move_object", {"translation": [0.0, 40.0, 0.0], "feature_name": "MCP_MOVE_IMPORTED"}))
+    g_after = payload(h2.call("inspect_work_part_geometry"))
+    if mv3.get("ok"):
+        disp3 = [mv3["bounds_after"]["min"][i] - mv3["bounds_before"]["min"][i] for i in range(3)]
+        assert all(abs(disp3[i] - t) <= 1e-3 for i, t in enumerate([0.0, 40.0, 0.0])), (disp3, mv3)
+        print("I2 move_object 正路径：导入件真移动 ->", mv3["name"], "位移回读 =", disp3)
+    else:
+        # NX2412 实测：STEP 导入件仍带 ImportedModel 特征（get_part_summary 可见），
+        # Move Body 依旧 0 位移——护栏必须回滚且包围盒不变（旧桥同款静默假成功被消灭）。
+        txt3 = json.dumps(mv3, ensure_ascii=False)
+        assert "rolled back" in txt3 or "did not move" in txt3, mv3
+        b0 = g_before["bodies"][0]["bounds"]["max"]
+        a0 = g_after["bodies"][0]["bounds"]["max"]
+        assert all(abs(b0[i] - a0[i]) < 1e-6 for i in range(3)), (g_before, g_after, mv3)
+        print("I2 实测：导入件仍属特征驱动(ImportedModel)，移动被回滚、包围盒不变 ->", mv3["error"][:80])
+    iv = payload(h2.call("save_work_part"))
+    assert iv.get("file_exists"), iv
+    print("I3 save ->", iv["file_size"], "bytes")
     h2.close()
     print(f"SMOKE LIVE PASS (pid={pid}, part={c2.get('full_path')})")
     return 0

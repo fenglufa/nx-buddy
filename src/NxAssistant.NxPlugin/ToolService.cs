@@ -42,6 +42,7 @@ internal static partial class ToolService
             case MethodNames.ChamferEdges: return ChamferEdges(p);
             case MethodNames.MoveObject: return MoveObject(p);
             case MethodNames.ExportExchange: return ExportExchange(p);
+            case MethodNames.ImportExchange: return ImportExchange(p);
             default:
                 throw new NotSupportedException($"unknown method: '{method}' (not implemented yet)");
         }

@@ -27,5 +27,6 @@ public static class MethodNames
     public const string FilletEdges = "fillet_edges";
     public const string ChamferEdges = "chamfer_edges";
     public const string ExportExchange = "export_exchange";
+    public const string ImportExchange = "import_exchange";
     public const string MoveObject = "move_object";
 }

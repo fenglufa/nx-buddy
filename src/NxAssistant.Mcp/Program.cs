@@ -387,6 +387,31 @@ public sealed class NxTools
         }, ct);
     }
 
+    [McpServerTool(Name = "import_exchange")]
+    [Description("把工作区内的 STEP 文件（.stp/.step，FILE-001 沙箱、必须已存在）导入当前工作部件：ap203/ap214/ap242 StepImporter，ImportTo=WorkPart，默认缝合成实体+简化几何。回读护栏：实体数增量为 0 或 update 报错即 ok:false（响应含 body/feature 前后计数与 update_error_count）。导入件是非特征实体——move_object 正路径依赖本工具。V1 仅 STEP。需有效授权。")]
+    public Task<JsonElement> ImportExchange(
+        string file_name,
+        string application_protocol = "ap242",
+        bool include_curves = true,
+        bool sew_surfaces = true,
+        bool simplify_geometry = true,
+        CancellationToken ct = default)
+    {
+        return Guard(() =>
+        {
+            _license.EnsureValid("import_exchange");
+            var p = new Dictionary<string, object?>
+            {
+                ["file_name"] = file_name,
+                ["application_protocol"] = application_protocol,
+                ["include_curves"] = include_curves,
+                ["sew_surfaces"] = sew_surfaces,
+                ["simplify_geometry"] = simplify_geometry,
+            };
+            return _plugin.CallAsync(MethodNames.ImportExchange, p, ct);
+        }, ct);
+    }
+
     /// warn 级规则告警随成功响应附带返回（不改变 ok 语义，不拦截写入）。
     private static JsonElement AttachRuleWarnings(JsonElement result, IReadOnlyList<NxAssistant.Rules.Finding> warnings)
     {

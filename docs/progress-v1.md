@@ -105,6 +105,18 @@ findings 表格（列对齐金样：图号/规则/级别/对象/实测/建议/�
 验证：smoke_tray T1–T6 全绿（含 ui-probe 真开关窗）；ISCC 编译通过并重建 setup.exe；
 `smoke_iss` 在装有真机的开发机上按其护栏拒跑（保护用户 HKCU Run 自启不被临时目录装覆写），留净机/下轮执行。
 
+**插件部署改必选（同日第二轮反馈，覆盖上条①的 deployplugin 任务与 /TASKS 写法）**：
+用户裁定"用 NX 小助手这步必须发生，不该摆给用户选"——iss 删除 `deployplugin` 任务行，
+`CurStepChanged(ssPostInstall)` 无条件尝试部署：环境有 `UGII_USER_DIR` 就跑随包
+`deploy_plugin.ps1`（合并复制语义不变），缺变量/脚本非零退出记为失败态；
+`ssDone` 且非静默时弹一次结果提示——成功=信息框（提醒重启 NX 生效），
+失败=错误框说清"插件本次未部署 + 原因是没找到 UGII_USER_DIR/退出码 N"+给手动补部署命令。
+静默/IT 推送不弹窗（看 deploy 脚本自己的输出窗口）。`smoke_iss.py` 去掉 `/TASKS=deployplugin`。
+用户第三问的答案（本来就有）：**卸载会清 startup**——`CurUninstallStepChanged` 在 usUninstall
+阶段只删"与 `{app}\nx_plugin\*.dll` 同名且存在"的文件，他人 startup 程序集不碰
+（smoke_iss T4 第三方 dummy DLL 存活断言覆盖）。备选方案"主页显示未部署"暂未做：
+状态页的"NX 未连接"已能间接暴露，人工验收后再定是否加专门提示。
+
 待办（按 `tool-migration-v1.md` §5 分批）：
 - 主页/工作台人工验收：`--ui-probe` 只证构造无异常；左键开主页、审图全流程（真 NX + 金样目录）、
   规则管理交互手感需要在开发机人检一轮后再发客户（与安装向导观感同轮）。
@@ -115,5 +127,5 @@ findings 表格（列对齐金样：图号/规则/级别/对象/实测/建议/�
 - 规则占位表（待客户数据）：FLANGE-PCD/STEEL/WELD/BOM/EDGE-SAFE 的数值表目前为 placeholder，命中即标 `placeholder:true`。
 - 打包交付：脚本安装器（`build/installer/*.ps1`）与 Inno Setup 壳（`build/installer/installer.iss` + `build/make_installer.ps1`）均已过端到端冒烟；余下仅**代码签名**——2026-09-22 用户定：测试验证阶段先不采购证书（注意：nginx 用的 SSL/TLS 证书是 serverAuth 用途，不能签代码），`make_installer.ps1 -Pfx` 钩子已备。
 - 运行时前置（2026-09-22 README 整理时新发现）：当前 publish 为 **framework-dependent**（csproj 无 RuntimeIdentifier/SelfContained），裸机客户需先装 .NET 8——宿主吃 Base Runtime，托盘（WinForms）吃 **Windows Desktop Runtime**。交付前二选一：文档化前置安装，或改 `-r win-x64 --self-contained` 发布（安装包体积换免依赖）。
-- 安装向导人工验收：`smoke_iss.py` 只覆盖静默路径；双击向导（中文文案/BOM、deployplugin 任务勾选、真 startup 部署含 NX 占用暂存分支）需在开发机人检一轮后再发客户。
+- 安装向导人工验收：`smoke_iss.py` 只覆盖静默路径；双击向导（中文文案/BOM、部署结果弹窗三态：成功/缺 UGII_USER_DIR/脚本报错、桌面图标、真 startup 部署含 NX 占用暂存分支）需在开发机人检一轮后再发客户。
 - 托盘观感：状态窗/设置为功能版（系统图标占位），品牌图标与文案打磨待交付设计。

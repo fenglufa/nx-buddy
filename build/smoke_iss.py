@@ -1,7 +1,7 @@
 # Inno 壳端到端冒烟（不需要 NX 在跑；UGII_USER_DIR 指向临时假目录，绝不碰真机）。
 # 前置：build/make_installer.ps1 已编出 dist\installer\NXAssistant-Setup-*.exe。
 # 用法: python build/smoke_iss.py
-# 覆盖：/VERYSILENT 安装（文件落位 + HKCU Run + deployplugin 任务走 deploy_plugin.ps1）
+# 覆盖：/VERYSILENT 安装（文件落位 + HKCU Run + 安装尾声自动走 deploy_plugin.ps1）
 #       → 安装态托盘探测 → unins000 /VERYSILENT 卸载（目录/Run 值/同名 startup 插件清空）
 #       → 清单外的第三方 startup DLL 必须存活（iss 卸载代码只按名删）。
 import glob
@@ -49,9 +49,9 @@ try:
         print("ABORT: HKCU Run\\NXAssistant 已存在（真装过？），冒烟不覆盖它", file=sys.stderr)
         sys.exit(2)
 
-    # T1 静默安装：/TASKS=deployplugin 强制勾选 startup 部署任务
+    # T1 静默安装：插件部署已改为尾声无条件执行（环境里有 UGII_USER_DIR 即部署）
     r = subprocess.run([setup, "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART",
-                        f"/DIR={target}", "/TASKS=deployplugin"],
+                        f"/DIR={target}"],
                        env=env, timeout=600)
     assert r.returncode == 0, f"setup 退出码 {r.returncode}"
     plugin_dlls = []

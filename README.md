@@ -83,17 +83,20 @@ pwsh build/deploy_plugin.ps1             # dist\nx_plugin → %UGII_USER_DIR%\st
 
 ### A. 双击安装包（推荐）
 
-运行 `NXAssistant-Setup-<版本>.exe`：向导中选装组件，若机器上有 `%UGII_USER_DIR%` 会出现
-"把 NX 插件合并部署进 startup"任务（勾选即随装部署，之后重启 NX 加载）。
-"创建桌面快捷方式"任务默认勾选——之后开机/双击桌面图标都会直接打开主页。
-装完可选立即启动托盘，并在 `HKCU\...\Run` 登记自启。
+运行 `NXAssistant-Setup-<版本>.exe`：向导只问两件事——装到哪（默认 `%LOCALAPPDATA%\Programs\NXAssistant`）
+和要不要桌面快捷方式（默认勾选；之后开机自启/双击桌面图标都直接打开主页）。
+NX 插件部署**不再让用户选**：安装尾声自动把 `{app}\nx_plugin` 合并复制进 `%UGII_USER_DIR%\startup`
+（只复制、不删他人文件）。检测不到 `UGII_USER_DIR`（NX 用户定制目录，由站点环境配置定义，与 NX
+装在哪个盘无关）或部署脚本失败，会弹错误提示说清原因并给出手动补部署命令；成功也会弹一句
+"重启 NX 后生效"。装完可选立即启动托盘，并在 `HKCU\...\Run` 登记自启。
 
 静默/批量推送（IT 友好）：
 
 ```powershell
-NXAssistant-Setup-1.0.0.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /TASKS=deployplugin
-# /DIR="..." 可改安装位置；deployplugin 任务要求进程环境里有 UGII_USER_DIR
-# 注意：显式给 /TASKS 时未列出的任务不生效；静默装也要桌面图标写 /TASKS="deployplugin desktopicon"
+NXAssistant-Setup-1.0.0.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
+# /DIR="..." 可改安装位置；插件部署无需 /TASKS——进程环境里有 UGII_USER_DIR 即自动部署，
+# 静默模式不弹提示（结果看 deploy_plugin.ps1 的输出窗口）
+# 静默装也要桌面图标：/TASKS=desktopicon（显式给 /TASKS 时，未列出的任务不生效）
 ```
 
 ### B. 脚本安装器（无安装包的内部/远程场景）

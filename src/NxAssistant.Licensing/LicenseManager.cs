@@ -46,6 +46,12 @@ public static class LicenseManager
     public static LicenseStatus Check()
     {
         var path = Environment.GetEnvironmentVariable("NXA_LICENSE_PATH") ?? DefaultLicensePath;
+        return Check(path);
+    }
+
+    /// <summary>校验指定路径的授权文件（调用方决定路径来源：env/settings.json/默认）。</summary>
+    public static LicenseStatus Check(string path)
+    {
         var machine = MachineFingerprint.Current();
         if (!File.Exists(path))
             return new LicenseStatus { State = LicenseState.NoLicense, Message = $"未找到授权文件：{path}", LicensePath = path, MachineHash = machine };

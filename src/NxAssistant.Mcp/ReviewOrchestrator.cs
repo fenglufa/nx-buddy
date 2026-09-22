@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
+using NxAssistant.Core;
 using NxAssistant.Core.Protocol;
 using NxAssistant.Rules;
 
@@ -21,17 +22,11 @@ internal static class ReviewOrchestrator
     private static readonly object _gate = new();
     private static readonly Dictionary<string, Task> _active = new();
 
-    public static string WorkspaceRoot
-    {
-        get
-        {
-            var env = Environment.GetEnvironmentVariable("NXA_WORKSPACE");
-            if (!string.IsNullOrWhiteSpace(env)) return Path.GetFullPath(env);
-            return Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "NXAssistant", "workspace");
-        }
-    }
+    public static string WorkspaceRoot => Path.GetFullPath(NxaSettings.Resolve(
+        "NXA_WORKSPACE", "workspace",
+        () => Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "NXAssistant", "workspace")));
 
     private static string RunsRoot => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),

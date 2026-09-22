@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using NxAssistant.Core;
 using NxAssistant.Rules;
 
 namespace NxAssistant.Mcp;
@@ -62,7 +63,7 @@ internal static class HostRules
         {
             var dir = FindPackDir()
                 ?? throw new DirectoryNotFoundException(
-                    "找不到 company_v3 规则包目录（可设 NXA_RULES_DIR 指向含 pack.json 的目录）");
+                    "找不到 company_v3 规则包目录（可设 NXA_RULES_DIR 或 settings.json 的 rules_dir 指向含 pack.json 的目录）");
             _pack = RulePack.Load(dir);
         }
         catch (Exception ex)
@@ -82,7 +83,9 @@ internal static class HostRules
 
     private static string? FindPackDir()
     {
-        var env = Environment.GetEnvironmentVariable("NXA_RULES_DIR");
+        string envOrSetting(string key) =>
+            NxaSettings.Resolve("NXA_RULES_DIR", key, () => "");
+        var env = envOrSetting("rules_dir");
         if (!string.IsNullOrWhiteSpace(env) && File.Exists(Path.Combine(env, "pack.json"))) return env;
         var local = Path.Combine(AppContext.BaseDirectory, "company_v3");
         if (File.Exists(Path.Combine(local, "pack.json"))) return local;

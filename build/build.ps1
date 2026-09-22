@@ -18,6 +18,8 @@ New-Item -ItemType Directory -Force -Path $dist | Out-Null
 
 # MCP 宿主：自包含发布到 dist/mcp（Agent 的 mcp 配置指向此 exe）
 & $DotNet publish (Join-Path $src "NxAssistant.Mcp/NxAssistant.Mcp.csproj") -c $Configuration -o (Join-Path $dist "mcp")
+# 托盘（PRD §6 交付形态 NxAssistant.exe）：发布到 dist/tray，--status-json 可无头采集状态
+& $DotNet publish (Join-Path $src "NxAssistant.Tray/NxAssistant.Tray.csproj") -c $Configuration -o (Join-Path $dist "tray")
 # NX 插件：net48 产物，部署时由安装程序合并进 %UGII_USER_DIR%\startup
 & $DotNet publish (Join-Path $src "NxAssistant.NxPlugin/NxAssistant.NxPlugin.csproj") -c $Configuration -o (Join-Path $dist "nx_plugin")
 

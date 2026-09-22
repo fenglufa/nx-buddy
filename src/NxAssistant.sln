@@ -17,6 +17,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NxAssistant.Rules", "NxAssi
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NxAssistant.Rules.Tests", "..\tests\NxAssistant.Rules.Tests\NxAssistant.Rules.Tests.csproj", "{552D6625-DDC7-4A6A-95D1-8FDEC6DFAE69}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NxAssistant.Tray", "NxAssistant.Tray\NxAssistant.Tray.csproj", "{74D8425B-9035-4CE1-9BE9-B8868444A962}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -54,5 +56,9 @@ Global
 		{552D6625-DDC7-4A6A-95D1-8FDEC6DFAE69}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{552D6625-DDC7-4A6A-95D1-8FDEC6DFAE69}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{552D6625-DDC7-4A6A-95D1-8FDEC6DFAE69}.Release|Any CPU.Build.0 = Release|Any CPU
+		{74D8425B-9035-4CE1-9BE9-B8868444A962}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{74D8425B-9035-4CE1-9BE9-B8868444A962}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{74D8425B-9035-4CE1-9BE9-B8868444A962}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{74D8425B-9035-4CE1-9BE9-B8868444A962}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

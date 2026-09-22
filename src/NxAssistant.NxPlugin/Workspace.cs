@@ -1,26 +1,22 @@
 using System;
 using System.IO;
 using System.Linq;
+using NxAssistant.Core;
 
 namespace NxAssistant.NxPlugin;
 
 /// <summary>
 /// 文件沙箱（规则 FILE-001）：新建/导出只允许落在工作区根下。
-/// 根目录：环境变量 NXA_WORKSPACE，缺省 %LOCALAPPDATA%\NXAssistant\workspace。
+/// 根目录解析顺序（与宿主/托盘同口径，`NxaSettings`）：
+/// 环境变量 NXA_WORKSPACE → settings.json[workspace] → %LOCALAPPDATA%\NXAssistant\workspace。
 /// </summary>
 internal static class Workspace
 {
-    public static string Root
-    {
-        get
-        {
-            var env = Environment.GetEnvironmentVariable("NXA_WORKSPACE");
-            if (!string.IsNullOrWhiteSpace(env)) return Path.GetFullPath(env);
-            return Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "NXAssistant", "workspace");
-        }
-    }
+    public static string Root => Path.GetFullPath(NxaSettings.Resolve(
+        "NXA_WORKSPACE", "workspace",
+        () => Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "NXAssistant", "workspace")));
 
     /// <summary>把"纯文件名"解析到工作区内，拒绝路径逃逸；existsFail=true 时已存在则报错。</summary>
     public static string Resolve(string fileName, bool existsFail)

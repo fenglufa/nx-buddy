@@ -21,11 +21,15 @@ public sealed class LicenseService
         {
             if (_cached != null && DateTime.Now - _cachedAt < TimeSpan.FromMinutes(10))
                 return _cached;
-            _cached = LicenseManager.Check();
+            _cached = LicenseManager.Check(ResolveLicensePath());
             _cachedAt = DateTime.Now;
             return _cached;
         }
     }
+
+    /// <summary>授权文件解析顺序：NXA_LICENSE_PATH → settings.json[license_path] → 默认位置。与托盘同一口径。</summary>
+    public static string ResolveLicensePath() => Core.NxaSettings.Resolve(
+        "NXA_LICENSE_PATH", "license_path", () => LicenseManager.DefaultLicensePath);
 
     public void InvalidateCache()
     {

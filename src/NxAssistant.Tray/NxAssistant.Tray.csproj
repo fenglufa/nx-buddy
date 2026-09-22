@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <!-- 交付形态按 PRD §6 表：NxAssistant.exe = 托盘 + 设置窗 -->
+    <AssemblyName>NxAssistant</AssemblyName>
+    <RootNamespace>NxAssistant.Tray</RootNamespace>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <InvariantGlobalization>false</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\NxAssistant.Core\NxAssistant.Core.csproj" />
+    <ProjectReference Include="..\NxAssistant.Licensing\NxAssistant.Licensing.csproj" />
+  </ItemGroup>
+
+</Project>

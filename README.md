@@ -17,6 +17,7 @@ Agent ──stdio──► NxAssistant.Mcp (net8, 官方 ModelContextProtocol)
 - `src/NxAssistant.NxPlugin` (net48)：唯一直接调用 NXOpen 的层，随 NX 启动加载，跑命名管道服务。
   **必须 net48**——NXOpen 是 .NET Framework 程序集，运行在 ugraf.exe 进程内。
 - `src/NxAssistant.Mcp` (net8)：MCP 宿主，做参数校验 / 授权闸门 / 规则引擎 / 报告，并经 IPC 调插件。
+- `src/NxAssistant.Tray` (net8-windows)：托盘 + 设置窗（交付名 `NxAssistant.exe`），与宿主分离的桌面进程；只读状态采集，路径类设置写 `settings.json`（三组件共用解析优先级）。
 - `licensing/`：离线 Key 签发工具（仅产品方，私钥不进客户包）。
 
 ## 构建
@@ -55,10 +56,14 @@ stdio 冒烟通过（`tools/list` 暴露 `ping`、`license_status`）。
 
 **抽取类 + 撤销批次（第十片）**：§9.2 批 5 剩余 10 个工具落地，宿主共 **33 工具**。插件侧 `InspectOps` 新增 8 个抽取器：`inspect_layers`（按**图层号**统计，Part/LayerManager 与 UFLayer 均无反查图层名通道）、`inspect_drawing_annotations`（注释文本 + 尺寸实测值）、`inspect_title_block`（逐页原始属性全集 + `GetScale`）、`inspect_drawing_sheet`（图框/模板从候选属性名嗅探）、`inspect_weld_annotations`、`inspect_parts_list`、`inspect_sheet_thickness`（**启发**：实体包围盒最小边 `solid_bbox_min_dim`，非板类零件不权威）、`inspect_hole_pattern`（同径 + 归一化轴向分组 ≥3 且径向散布 <15% 判圆形孔组，PCD=2·平均半径）。`undo_last_assistant_change`（`UndoOps.AssistantMarks`）把 §1.2"绝不误撤用户操作"做成**双校验**：写成功时记 (undo mark id, 名, 模型指纹=特征名/表达式值/体名 SHA1)，撤销时要求 ① 最新可见标记确属助手（或 rebuild/move-regen no-op 白名单）② 当前指纹等于写入后快照，任一不满足即拒并给中文原因；账本进程内、按部件路径最多 8 条，NX 重启即清空。因 §9.3 把工程图**创建**推迟到 V1.1，图纸侧抽取器以负路径验收（无图纸页时 `drawing_sheet_count=0` 且 ok:true），客户 2D 样件到位后无需改契约即可转正；标题栏字段→canonical 名走 `docs/company_v3/title_block_fields.json` 占位别名表（placeholder:true，待客户校准），`RuleEngine.TitleField` 负责解析，审图 findings 行的"图号/版本"已从文件名改为读真实标题栏。`extract_evidence` 证据补 `part.plate_thickness`/`part.hole_patterns` 与整段 `drawing`（规则引擎对缺失段自然跳过，第九片审图判定零回归）。**实机全绿**（smoke_live 阶段 K：无账本直拒→建 block→撤销 body_count 归 0→建 block→rebuild→再撤销（证明 no-op mark 不阻断回退）→链撤销到底再拒；板厚启发=12 命中、图层分布 `{'1': 1}`、三图纸抽取器空证据正常；阶段 J 复跑判定不变）。
 
+**托盘 + 共享配置批次（第十一片）**：补上三组件里最后的交付面——`NxAssistant.Tray`（net8-windows，产物名 `NxAssistant.exe`，PRD §6 的"托盘 + 设置窗"）。`StatusProbe` 只读采集四类状态：授权（`LicenseManager.Check(path)`）、NX 连接（枚举 `\\.\pipe\` 命名空间判管道名在位，**不下 IPC 请求**——宿主是逐请求短连接，托盘若发 ping 会和真实请求抢单 worker 队列）、MCP 在跑（进程表）、审图忙碌（扫 `runs\*\run.json` 有无 `running`）。新增 `NxAssistant.Core/NxaSettings`：三组件统一"环境变量 > `settings.json` > 默认"的路径解析优先级（`NXA_WORKSPACE`/`NXA_RULES_DIR`/`NXA_LICENSE_PATH` 各对应 `workspace`/`rules_dir`/`license_path` 键）——插件 `Workspace.Root`、宿主 `HostRules`/`ReviewOrchestrator`/`LicenseService` 全部改走同一 `Resolve`，确保 FILE-001 沙箱根在写入侧与校验侧不再分叉；`settings.json` 由托盘"设置"分页写、宿主/插件下次解析即重读（热改）。托盘另提供 `--status-json` 无头模式（状态与 UI 解耦，供 `build/smoke_tray.py` 与技术支持一键采集）、右键"导入授权 Key"（复制到授权位并重探）、可复制的 MCP 配置片段（`command` 指向宿主绝对路径）、打开插件日志/审图报告目录。`build/build.ps1` 增发布 `dist/tray/`。**离线全绿**（`smoke_tray.py` 状态形状 + settings.json 写入→重探生效→清理回落；`smoke_stdio.py` 仍 33 工具；规则金样全绿）；**过 NX2412 实机**（`smoke_live` 全量 A–K 零回归——第十/十一片改动波及插件 `Workspace`，重跑证明沙箱根仍解析到 `%LOCALAPPDATA%\NXAssistant\workspace` 且 5 张金样判定、STEP 往返、undo 链、抽取负路径全部不变；托盘 `--expect-plugin-online true` 在 NX 起来后命中）。
+
 待办（按 `tool-migration-v1.md` §5 分批）：
 - 读/写工具批次（续）：`shell_body`/`mirror_feature` 等按需排期（`import_exchange` 已随第八片落地，见上）。
 - 工程图类样件与校准（待客户）：真实图框 id、图层名反查通道、标题栏字段别名、焊缝/BOM 行文本、圆形孔组 PCD 容差、板厚启发在异形件上的替代口径——客户 2D 图纸样件到位后把第十片各负路径/占位逐项转正。
 - 规则占位表（待客户数据）：FLANGE-PCD/STEEL/WELD/BOM/EDGE-SAFE 的数值表目前为 placeholder，命中即标 `placeholder:true`。
+- 打包交付：Windows 安装程序（三组件一键装 + 可选合并 `%UGII_USER_DIR%\startup`、不覆盖既有 UGII 定制根，PRD §7.1）尚未做；当前用 `build.ps1` 产物 + `deploy_plugin.ps1` 手动部署。
+- 托盘观感：状态窗/设置为功能版（系统图标占位），品牌图标与文案打磨待交付设计。
 
 ## 已知约束 / 红线
 

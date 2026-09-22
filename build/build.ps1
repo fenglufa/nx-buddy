@@ -1,4 +1,4 @@
-# 构建 nx-buddy。产出到 dist/，不写入 %UGII_USER_DIR%（避免覆盖已存在的 NX-MCP startup DLL，PRD 7.1）。
+﻿# 构建 nx-buddy。产出到 dist/，不写入 %UGII_USER_DIR%（避免覆盖已存在的 NX-MCP startup DLL，PRD 7.1）。
 # 部署到 NX（复制插件到 startup 并重启 NX）是单独的、需确认的步骤，见 docs/README 部署节。
 [CmdletBinding()]
 param(

@@ -55,5 +55,6 @@ stdio 冒烟通过（`tools/list` 暴露 `ping`、`license_status`）。
 - stdio 传输：stdout 只走 JSON-RPC，诊断一律进 stderr/文件（已在宿主 `ClearProviders`）。
 - **插件线程亲和**：NXOpen 对主线程有亲和性。管道 worker 只做收发，所有 handler 经 `NxPlugin/MainThread.cs` 的
   隐藏 WinForms Control `BeginInvoke` marshal 回 NX 主线程执行（超时 120s 明确报错，不盲目重试）。
-- 部署插件进 `%UGII_USER_DIR%\startup`：客户已确认旧 NX-MCP 桥可删除、无需共存；但这一步需重启 NX，改动正在运行的 NX 前先确认。
+- 部署插件进 `%UGII_USER_DIR%\startup`：旧 NX-MCP 桥已摘除（备份在 `E:\NX-MCP\nx_user\startup_backup\`，实机验证通过后待删）。NX 运行中 startup DLL 会被锁定，`deploy_plugin.ps1` 会自动暂存到 `dist\nx_plugin_staged` 并在下次 NX 关闭后重跑生效。
+- Windows PowerShell 5.1 按 GBK 读无 BOM 的 UTF-8 `.ps1`，中文注释会吞行：**所有 .ps1 必须带 UTF-8 BOM 保存**。
 - 目标框架锁定 NX 2412；占位规则数值不得写死进 C#。

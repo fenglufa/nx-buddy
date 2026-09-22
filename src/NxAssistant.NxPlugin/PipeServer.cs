@@ -37,9 +37,10 @@ internal sealed class PipeServer
     {
         while (_running)
         {
+            NamedPipeServerStream? server = null;
             try
             {
-                using var server = new NamedPipeServerStream(
+                server = new NamedPipeServerStream(
                     NxIpc.FullPipeName(),
                     PipeDirection.InOut,
                     NamedPipeServerStream.MaxAllowedServerInstances,
@@ -52,6 +53,11 @@ internal sealed class PipeServer
             {
                 NxLog.Write("pipe accept error: " + ex.Message);
                 Thread.Sleep(200);
+            }
+            finally
+            {
+                // 客户端先断开时 Disconnect 会抛"管道已中断"——属常态，不得冒成 accept error。
+                try { server?.Dispose(); } catch { /* ignore */ }
             }
         }
     }

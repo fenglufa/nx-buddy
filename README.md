@@ -44,9 +44,10 @@ stdio 冒烟通过（`tools/list` 暴露 `ping`、`license_status`）。
 写前拦截与审图共用；金样 `dotnet run --project tests/NxAssistant.Rules.Tests`（含 φ13.2→FAIL+建议 13/14）全绿。
 **测试样件**：`test/drawings/` 用 NX 2412 实机造出 5 个 `.prt` 金样（合规板、φ13.2 违规、4×重复孔、华恒销轴/传感器、空图），附预期 findings 对照表，保留不删。
 **读/写工具批次（第一片）**：插件侧 `MainThread`（隐藏 WinForms Control 把 NXOpen 调用 marshal 回主线程）、`AssemblyResolve` 钩子（让 ugraf AppDomain 解析同目录依赖）、工作区沙箱 `Workspace`；已接线 5 方法：`ping`/`get_part_summary`/`inspect_work_part_geometry`/`save_work_part`/`create_part`（后者受 `LICENSE_INVALID` 闸门保护）；`build/deploy_plugin.ps1` 复制产物到 startup（不删既有 DLL）。**已过 NX 2412 实机全链路**（`build/smoke_live.py`：ping→无件报错→无授权拦截→带授权 create/summary/inspect/save 闭环落盘）。
+**拓扑/特征批次（第二片）**：插件侧 `TopologyOps`（对齐 nx_remote_ops.py 的 stable_id 几何指纹：SHA1 规范化 JSON 前 20 位，save/回开重定位、失配几何回退、sort_by/occurrence/unique 语义）+ `inspect_body_topology`/`resolve_topology`/`inspect_feature`/`rebuild_work_part` 四方法宿主接线；PipeServer 断开类 IOException 不再刷日志。**已过 NX 2412 实机全绿**（smoke_live 阶段 C：金样板 13 面/24 边，stable_id 命中→回退命中同一最大面→报错路径→特征检查→重建 ok，日志 0 噪音）。
 
 待办（按 `tool-migration-v1.md` §5 分批）：
-- 读/写工具批次（续）：部署插件 + 重启 NX 实机联调本切片；再补 rebuild/inspect_feature/topology/stable_id 与写操作（create_block/extrude/hole…含写前规则守卫）。
+- 读/写工具批次（续）：写操作切片（create_block/create_parametric_sketch/extrude_sketch/set_feature_expression…，含写前规则守卫），实机验证后再接 hole/fillet/chamfer/move。
 - 审图长任务：`review_folder`/`review_status`/`review_findings`（run_id 状态机 + xlsx 报告，xlsx 用 ClosedXML）；把规则引擎接上 NX 证据抽取，用 `test/drawings` 验收。
 - 工程图类样件（图框/标题栏/图层）：待客户确认真实图框 id 后补 2D 图纸样件。
 
@@ -55,6 +56,6 @@ stdio 冒烟通过（`tools/list` 暴露 `ping`、`license_status`）。
 - stdio 传输：stdout 只走 JSON-RPC，诊断一律进 stderr/文件（已在宿主 `ClearProviders`）。
 - **插件线程亲和**：NXOpen 对主线程有亲和性。管道 worker 只做收发，所有 handler 经 `NxPlugin/MainThread.cs` 的
   隐藏 WinForms Control `BeginInvoke` marshal 回 NX 主线程执行（超时 120s 明确报错，不盲目重试）。
-- 部署插件进 `%UGII_USER_DIR%\startup`：旧 NX-MCP 桥已摘除（备份在 `E:\NX-MCP\nx_user\startup_backup\`，实机验证通过后待删）。NX 运行中 startup DLL 会被锁定，`deploy_plugin.ps1` 会自动暂存到 `dist\nx_plugin_staged` 并在下次 NX 关闭后重跑生效。
+- 部署插件进 `%UGII_USER_DIR%\startup`：旧 NX-MCP 桥已摘除，`startup_backup\` 残留（NXMcPRemotingServer.dll）已删除（源树 E:\NX-MCP 可随时重建）。NX 运行中 startup DLL 会被锁定，`deploy_plugin.ps1` 会自动暂存到 `dist\nx_plugin_staged` 并在下次 NX 关闭后重跑生效。
 - Windows PowerShell 5.1 按 GBK 读无 BOM 的 UTF-8 `.ps1`，中文注释会吞行：**所有 .ps1 必须带 UTF-8 BOM 保存**。
 - 目标框架锁定 NX 2412；占位规则数值不得写死进 C#。

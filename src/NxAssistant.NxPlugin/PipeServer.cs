@@ -49,6 +49,11 @@ internal sealed class PipeServer
                 server.WaitForConnection();
                 HandleConnection(server);
             }
+            catch (IOException)
+            {
+                // 宿主进程退出时挂起的 WaitForConnection 会抛"管道已中断"：属客户端离开的常态，不记错误。
+                Thread.Sleep(50); // 防持续中断态下空转
+            }
             catch (Exception ex)
             {
                 NxLog.Write("pipe accept error: " + ex.Message);

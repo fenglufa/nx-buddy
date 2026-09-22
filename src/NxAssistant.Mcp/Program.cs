@@ -93,6 +93,68 @@ public sealed class NxTools
         }, ct);
     }
 
+    [McpServerTool(Name = "inspect_body_topology")]
+    [Description("逐面/逐边拓扑清单：每条记录含 stable_id（几何指纹，重建模型后仍可命中）、类型、法向/端点、包围盒/长度等。体由 body_index（默认 0）或 body_feature_id(+body_occurrence) 指定。")]
+    public Task<JsonElement> InspectBodyTopology(
+        int? body_index = null,
+        string? body_feature_id = null,
+        int? body_occurrence = null,
+        CancellationToken ct = default)
+    {
+        return Guard(() =>
+        {
+            var p = new Dictionary<string, object?>();
+            if (body_index is int bi) p["body_index"] = bi;
+            if (!string.IsNullOrWhiteSpace(body_feature_id)) p["body_feature_id"] = body_feature_id;
+            if (body_occurrence is int bo) p["body_occurrence"] = bo;
+            return _plugin.CallAsync(MethodNames.InspectBodyTopology, p, ct);
+        }, ct);
+    }
+
+    [McpServerTool(Name = "resolve_topology")]
+    [Description("按 selector 定位唯一面/边：kind 取 face/edge；selector 优先 stable_id，失配时可用几何回退字段（uf_type/normal/plane_offset/radius/near_point/direction/length/sort_by 等）。unique 默认 true，多命中需 sort_by 或 occurrence。返回 selected 与 matches。")]
+    public Task<JsonElement> ResolveTopology(
+        string kind,
+        JsonElement selector,
+        int? body_index = null,
+        string? body_feature_id = null,
+        int? body_occurrence = null,
+        bool? unique = null,
+        CancellationToken ct = default)
+    {
+        return Guard(() =>
+        {
+            var p = new Dictionary<string, object?>
+            {
+                ["kind"] = kind,
+                ["selector"] = selector,
+            };
+            if (body_index is int bi) p["body_index"] = bi;
+            if (!string.IsNullOrWhiteSpace(body_feature_id)) p["body_feature_id"] = body_feature_id;
+            if (body_occurrence is int bo) p["body_occurrence"] = bo;
+            if (unique is bool u) p["unique"] = u;
+            return _plugin.CallAsync(MethodNames.ResolveTopology, p, ct);
+        }, ct);
+    }
+
+    [McpServerTool(Name = "inspect_feature")]
+    [Description("单特征详情：类型、是否过期/抑制、表达式清单、父/子特征 journal id、所属体 tag、错误/警告消息。feature_id 接受特征名、journal id 或序号。")]
+    public Task<JsonElement> InspectFeature(
+        string feature_id,
+        CancellationToken ct = default)
+    {
+        return Guard(() =>
+        {
+            var p = new Dictionary<string, object?> { ["feature_id"] = feature_id };
+            return _plugin.CallAsync(MethodNames.InspectFeature, p, ct);
+        }, ct);
+    }
+
+    [McpServerTool(Name = "rebuild_work_part")]
+    [Description("重建当前工作部件（UpdateManager.DoUpdate），返回 update_error_count 与逐特征诊断（过期/错误/警告）。写操作后用它验证模型是否健康。")]
+    public Task<JsonElement> RebuildWorkPart(CancellationToken ct) =>
+        Guard(() => _plugin.CallAsync(MethodNames.RebuildWorkPart, null, ct), ct);
+
     /// <summary>
     /// SDK 2.2.0 会把工具异常吞成 "An error occurred invoking ..."。这里对齐 NX-MCP 约定：
     /// 失败转成可读 JSON 载荷 {ok:false,error,error_type} 交给 Agent 判读，而不是丢协议错误。

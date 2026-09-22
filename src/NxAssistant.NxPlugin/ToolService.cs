@@ -14,7 +14,7 @@ namespace NxAssistant.NxPlugin;
 /// 插件内方法分发。handler 对应 NX-MCP 的 _OPS：一个方法名 → 一段 NXOpen 逻辑，返回可 JSON 化对象。
 /// 所有 handler 一律经 MainThread.Run 在 NX 主线程执行（NXOpen 线程亲和）。
 /// </summary>
-internal static class ToolService
+internal static partial class ToolService
 {
     public static object Dispatch(string method, JsonElement @params) =>
         MainThread.Run(() => DispatchCore(method, @params));
@@ -28,6 +28,10 @@ internal static class ToolService
             case MethodNames.InspectWorkPartGeometry: return InspectWorkPartGeometry(p);
             case MethodNames.SaveWorkPart: return SaveWorkPart();
             case MethodNames.CreatePart: return CreatePart(p);
+            case MethodNames.InspectBodyTopology: return InspectBodyTopology(p);
+            case MethodNames.ResolveTopology: return ResolveTopology(p);
+            case MethodNames.InspectFeature: return InspectFeature(p);
+            case MethodNames.RebuildWorkPart: return RebuildWorkPart();
             default:
                 throw new NotSupportedException($"unknown method: '{method}' (not implemented yet)");
         }

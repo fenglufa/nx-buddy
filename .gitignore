@@ -35,3 +35,4 @@ licensing/keys/
 *.log
 test/**/tmp/
 test/**/out/
+build/__pycache__/

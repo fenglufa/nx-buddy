@@ -142,7 +142,7 @@ V1 交付集 = §9.1 + §9.2 + `move_object` = **34 个工具**（客户 2026-09
 
 ## 5. 分批实现顺序（逐步提交，不攒代码）
 
-> 进度（2026-09-22）：批 1 骨架 ✅（8d304a0）；批 2 授权 ✅（0188b1a）；批 4 规则引擎部分 ✅（d747436）+ 批 6 金样 5 件 ✅（f9f88da）；批 3 读工具首切片 ✅ **实机联调通过**（a63a351+eda698b：主线程 marshal + `get_part_summary`/`inspect_work_part_geometry`/`save_work_part`/`create_part`；leaveOpen 版插件已在 pid 16556 复验全绿；旧 NX-MCP 桥已摘除至 `startup_backup\`；PipeServer Dispose 日志噪音修复在 `dist\nx_plugin_staged` 待下次 NX 关闭后 deploy）；其余进行中。
+> 进度（2026-09-22）：批 1 骨架 ✅（8d304a0）；批 2 授权 ✅（0188b1a）；批 4 规则引擎部分 ✅（d747436）+ 批 6 金样 5 件 ✅（f9f88da）；批 3 读工具首切片 ✅ **实机联调通过**（a63a351+eda698b：主线程 marshal + `get_part_summary`/`inspect_work_part_geometry`/`save_work_part`/`create_part`；leaveOpen 版插件已在 pid 16556 复验全绿；旧 NX-MCP 桥已摘除且 `startup_backup\` 残留已清理）；批 3 拓扑/特征第二切片 ✅ **实机全绿**（`TopologyOps`：`inspect_body_topology`/`resolve_topology`(stable_id+几何回退+sort_by)/`inspect_feature`/`rebuild_work_part`，smoke_live 阶段 C 在金样板上 13 面/24 边验证回环；PipeServer 断开噪音与 Dispose 修复已部署复验）；其余进行中。
 
 按"先跑通骨架 → 再补读 → 再补写 → 最后审图长任务"推进，每批一个可验证闭环、独立提交：
 

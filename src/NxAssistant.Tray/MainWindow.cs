@@ -15,6 +15,7 @@ internal sealed class MainWindow : Form
     private readonly System.Windows.Forms.Timer _timer;
     private readonly Label _overview;
     private readonly TabControl _tabs;
+    private readonly CheckBox _autoStart;
     private readonly McpHostClient _hostClient;
     private TrayStatus _status;
     private bool _realClose;
@@ -33,12 +34,22 @@ internal sealed class MainWindow : Form
 
         var home = new TabPage("状态与操作") { Padding = new Padding(14) };
         _overview = new Label { Dock = DockStyle.Top, Height = 300, Text = OverviewText(_status) };
-        var ops = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 44, Padding = new Padding(0, 4, 0, 0) };
+        var ops = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 76, Padding = new Padding(0, 4, 0, 0) };
         ops.Controls.Add(OpButton("导入授权 Key…", () => TrayActions.ImportKey(this, RefreshNow)));
         ops.Controls.Add(OpButton("复制 MCP 配置片段", () => TrayActions.CopyMcpConfig(this, _status)));
         ops.Controls.Add(OpButton("打开插件日志", () => TrayActions.OpenPath(this, _status.PluginLogPath, true)));
         ops.Controls.Add(OpButton("打开审图报告目录", () => TrayActions.OpenPath(this, _status.RunsRoot, false)));
         ops.Controls.Add(OpButton("路径设置…", OpenSettings));
+        _autoStart = new CheckBox
+        {
+            Text = "开机自动启动（登录后自动运行托盘）",
+            AutoSize = true,
+            Margin = new Padding(3, 10, 0, 0),
+        };
+        try { _autoStart.Checked = AutoStart.IsEnabled(); }
+        catch (Exception) { _autoStart.Enabled = false; } // 注册表读不了总比崩主页好
+        _autoStart.CheckedChanged += (_, _) => OnAutoStartToggled();
+        ops.Controls.Add(_autoStart);
         var homeBody = new Panel { Dock = DockStyle.Fill };
         homeBody.Controls.Add(ops);
         homeBody.Controls.Add(_overview);
@@ -67,6 +78,29 @@ internal sealed class MainWindow : Form
         var b = new Button { Text = text, AutoSize = true };
         b.Click += (_, _) => act();
         return b;
+    }
+
+    /// <summary>
+    /// 自启开关：勾选态即注册表真值，写失败就回滚勾选并把原因说清（不静默骗人）。
+    /// 注意：重新运行安装程序会按安装器策略重写该值（默认开），关掉再装回来需在这里再勾掉。
+    /// </summary>
+    private void OnAutoStartToggled()
+    {
+        var want = _autoStart.Checked;
+        try
+        {
+            if (want) AutoStart.Enable();
+            else AutoStart.Disable();
+        }
+        catch (Exception ex)
+        {
+            _autoStart.Checked = !want;
+            MessageBox.Show(this,
+                (want ? "开启" : "关闭") + "开机自动启动失败：" + ex.Message +
+                "\n\n也可手动改：注册表 HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Run 下的 " +
+                AutoStart.ValueName + " 值。",
+                "NX 小助手", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
     }
 
     private void RefreshNow()
